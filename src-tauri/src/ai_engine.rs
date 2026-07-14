@@ -117,7 +117,7 @@ pub async fn generate_instrument_briefing(
          2) Czy newsy powyżej mają realny związek z {instrument}, i jeśli tak - jak mogą wpłynąć \
             na jego zachowanie w najbliższych sesjach,\n\
          3) Na co warto zwrócić uwagę / jakie jest ryzyko błędnej interpretacji tych danych.\n\
-         Pisz prostym, konkretnym językiem, bez żargonu bez wyjaśnienia. Nie dodawaj nagłówków \
+         Pisz prostym, konkretnym językiem, bez żargonu. Nie dodawaj nagłówków \
          markdown ani kodu - tylko czysty tekst podzielony na akapity."
     );
 
@@ -140,7 +140,12 @@ fn label_to_tv_ticker(label: &str) -> &'static str {
 pub fn find_strongest_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
     reports
         .iter()
-        .max_by(|a, b| a.correlation.abs().partial_cmp(&b.correlation.abs()).unwrap())
+        .max_by(|a, b| {
+            a.correlation
+                .abs()
+                .partial_cmp(&b.correlation.abs())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
 }
 
 pub fn generate_correlation_pine_script(equity_pair_symbol: &str) -> String {

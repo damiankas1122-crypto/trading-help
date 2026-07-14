@@ -50,12 +50,12 @@ pub fn filter_news_for_instrument(news: &[NewsItem], keywords: &[&str], limit: u
         .collect()
 }
 
-pub fn keywords_for(instrument: &str) -> Vec<&'static str> {
+pub fn keywords_for(instrument: &str) -> &'static [&'static str] {
     match instrument {
-        "NASDAQ" => vec!["nasdaq", "tech stocks", "technology sector", "big tech", "ai stocks"],
-        "SP500" => vec!["s&p 500", "s&p500", "wall street", "stock market", "equities", "fed", "federal reserve", "inflation"],
-        "GOLD" => vec!["gold", "bullion", "safe haven", "precious metal"],
-        "SILVER" => vec!["silver"],
-        _ => vec![],
+        "NASDAQ" => &["nasdaq", "tech stocks", "technology sector", "big tech", "ai stocks"],
+        "SP500" => &["s&p 500", "s&p500", "wall street", "stock market", "equities", "fed", "federal reserve", "inflation"],
+        "GOLD" => &["gold", "bullion", "safe haven", "precious metal"],
+        "SILVER" => &["silver"],
+        _ => &[],
     }
 }

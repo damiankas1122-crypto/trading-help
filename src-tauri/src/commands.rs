@@ -33,7 +33,11 @@ pub fn calculate_correlation(data_a: Vec<f64>, data_b: Vec<f64>) -> f64 {
 }
 
 fn to_returns(closes: &[f64]) -> Vec<f64> {
-    closes.windows(2).map(|w| (w[1] - w[0]) / w[0]).collect()
+    closes
+        .windows(2)
+        .filter(|w| w[0] != 0.0)
+        .map(|w| (w[1] - w[0]) / w[0])
+        .collect()
 }
 
 fn align_and_correlate_lagged(leader: &[f64], follower: &[f64], lag: usize) -> f64 {
@@ -199,30 +203,46 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
     let delta_context = build_delta_context(&equity_reports, &metals_report, &previous_snapshot);
     let compared_to = previous_snapshot.as_ref().map(|s| s.slot.clone());
 
-    let instruments = ["NASDAQ", "SP500", "GOLD", "SILVER"];
-    let mut instrument_briefings = Vec::new();
-
-    for instrument in instruments {
+    fn build_instrument_context(
+        instrument: &str,
+        all_news: &[models::NewsItem],
+        equity_reports: &[models::AnalyticalReport],
+        metals_report: &models::PreciousMetalsReport,
+        delta_context: &str,
+    ) -> (String, Vec<models::NewsItem>) {
         let keywords = news_engine::keywords_for(instrument);
-        let filtered_news = news_engine::filter_news_for_instrument(&all_news, &keywords, 5);
+        let filtered_news = news_engine::filter_news_for_instrument(all_news, keywords, 5);
 
         let mut numeric_context = if instrument == "GOLD" || instrument == "SILVER" {
-            numeric_context_for_metal(instrument, &metals_report)
+            numeric_context_for_metal(instrument, metals_report)
         } else {
-            numeric_context_for_equity(instrument, &equity_reports)
+            numeric_context_for_equity(instrument, equity_reports)
         };
 
         numeric_context.push_str("\n\nZMIANA WZGLĘDEM POPRZEDNIEJ ANALIZY:\n");
-        numeric_context.push_str(&delta_context);
+        numeric_context.push_str(delta_context);
 
-        let briefing = ai_engine::generate_instrument_briefing(
-            instrument,
-            &numeric_context,
-            &filtered_news,
-        ).await?;
-
-        instrument_briefings.push(briefing);
+        (numeric_context, filtered_news)
     }
+
+    let (ctx_nasdaq, news_nasdaq) = build_instrument_context("NASDAQ", &all_news, &equity_reports, &metals_report, &delta_context);
+    let (ctx_sp500, news_sp500) = build_instrument_context("SP500", &all_news, &equity_reports, &metals_report, &delta_context);
+    let (ctx_gold, news_gold) = build_instrument_context("GOLD", &all_news, &equity_reports, &metals_report, &delta_context);
+    let (ctx_silver, news_silver) = build_instrument_context("SILVER", &all_news, &equity_reports, &metals_report, &delta_context);
+
+    let (briefing_nasdaq, briefing_sp500, briefing_gold, briefing_silver) = tokio::join!(
+        ai_engine::generate_instrument_briefing("NASDAQ", &ctx_nasdaq, &news_nasdaq),
+        ai_engine::generate_instrument_briefing("SP500", &ctx_sp500, &news_sp500),
+        ai_engine::generate_instrument_briefing("GOLD", &ctx_gold, &news_gold),
+        ai_engine::generate_instrument_briefing("SILVER", &ctx_silver, &news_silver),
+    );
+
+    let instrument_briefings = vec![
+        briefing_nasdaq?,
+        briefing_sp500?,
+        briefing_gold?,
+        briefing_silver?,
+    ];
 
     let strongest_equity = ai_engine::find_strongest_pair(&equity_reports)
         .ok_or_else(|| "Brak danych do analizy indeksów".to_string())?;
