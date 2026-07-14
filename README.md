@@ -1,4 +1,4 @@
-# Trading Help — AI Market Co-Pilot
+# [Trading Help — AI Market Co-Pilot]
 
 A cross-platform desktop app that analyzes NASDAQ, S&P 500, Gold, and Silver in
 real time, correlates them with live financial news, and turns the results
@@ -7,6 +7,11 @@ Script indicators.
 
 Built with **Rust (Tauri)** on the backend and **React + TypeScript** on the
 frontend. Actively used by a real client for daily market briefings.
+
+## Download
+
+Grab the latest Windows installer (no build required) from the
+[Releases page](https://github.com/damiankas1122-crypto/trading-help/releases/latest).
 
 ## Features
 
