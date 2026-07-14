@@ -1,0 +1,20 @@
+[package]
+name = "trading_help"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["damiankas1122-crypto"]
+edition = "2021"
+
+[build-dependencies]
+tauri-build = { version = "2.0", features = [] }
+
+[dependencies]
+tauri = { version = "2.0", features = [] }
+tauri-plugin-shell = "2.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+yahoo_finance_api = "2.2"
+time = { version = "0.3", features = ["macros"] }
+rss = "2"
