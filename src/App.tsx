@@ -37,6 +37,8 @@ type FullBriefing = {
   pine_script_correlation_explanation: string;
   pine_script_gsr: string;
   pine_script_gsr_explanation: string;
+  is_stale_data: boolean;
+  stale_data_message: string | null;
 };
 
 type Snapshot = {
@@ -200,7 +202,7 @@ function App() {
       <ThreeBackground />
 
       <header className="h-16 border-b border-cyan-900/50 flex items-center justify-between px-6 bg-[#0a0a1a]/70 backdrop-blur-sm sticky top-0 z-10">
-        <h1 className="text-xl font-black text-cyan-400 tracking-[0.2em]">TRADING_HELP</h1>
+        <h1 className="text-xl font-black text-cyan-400 tracking-[0.2em]">TRADING HELP</h1>
         {lastUpdated && (
           <span className="text-xs text-slate-500 font-mono">Ostatnia aktualizacja: {lastUpdated}</span>
         )}
@@ -263,11 +265,19 @@ function App() {
               )}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {briefing.instrument_briefings.map((b) => (
-                <InstrumentCard key={b.instrument} briefing={b} />
-              ))}
-            </div>
+            {briefing.is_stale_data && (
+              <div className="bg-amber-950/30 border border-amber-700/50 rounded-2xl p-4 text-amber-300 text-xs font-mono">
+                {briefing.stale_data_message}
+              </div>
+            )}
+
+            {!briefing.is_stale_data && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {briefing.instrument_briefings.map((b) => (
+                  <InstrumentCard key={b.instrument} briefing={b} />
+                ))}
+              </div>
+            )}
 
             <div className="bg-[#0a0a1a]/60 rounded-2xl border border-cyan-900/30 p-5">
               <p className="text-cyan-400 text-xs font-bold uppercase tracking-[0.15em] mb-3">Surowe dane</p>
@@ -289,17 +299,21 @@ function App() {
               </div>
             </div>
 
-            <PineScriptSection
-              title="Pine Script: Korelacja indeksów"
-              explanation={briefing.pine_script_correlation_explanation}
-              code={briefing.pine_script_correlation}
-            />
+            {!briefing.is_stale_data && (
+              <>
+                <PineScriptSection
+                  title="Pine Script: Korelacja indeksów"
+                  explanation={briefing.pine_script_correlation_explanation}
+                  code={briefing.pine_script_correlation}
+                />
 
-            <PineScriptSection
-              title="Pine Script: Gold/Silver Ratio"
-              explanation={briefing.pine_script_gsr_explanation}
-              code={briefing.pine_script_gsr}
-            />
+                <PineScriptSection
+                  title="Pine Script: Gold/Silver Ratio"
+                  explanation={briefing.pine_script_gsr_explanation}
+                  code={briefing.pine_script_gsr}
+                />
+              </>
+            )}
           </>
         )}
 
