@@ -72,15 +72,15 @@ pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>
     let timestamp = OffsetDateTime::now_utc().unix_timestamp().to_string();
     let mut reports = Vec::new();
 
-    for (leader_label, _, leader_closes) in &markets {
-        for (follower_label, follower_data, follower_closes) in &markets {
+     for (leader_label, leader_data, leader_closes) in &markets {
+        for (follower_label, _follower_data, follower_closes) in &markets {
             if leader_label == follower_label {
                 continue;
             }
             let leader_returns = to_returns(leader_closes);
             let follower_returns = to_returns(follower_closes);
             let correlation = align_and_correlate_lagged(&leader_returns, &follower_returns, DEFAULT_LAG);
-            let volatility = analysis_engine::calculate_volatility(follower_data);
+            let volatility = analysis_engine::calculate_volatility(leader_data);
 
             reports.push(models::AnalyticalReport {
                 symbol: format!("{}->{}", leader_label, follower_label),
@@ -143,9 +143,10 @@ pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsRepo
 }
 
 fn numeric_context_for_equity(instrument: &str, reports: &[models::AnalyticalReport]) -> String {
+    let leader_prefix = format!("{}->", instrument);
     reports
         .iter()
-        .filter(|r| r.symbol.contains(instrument))
+        .filter(|r| r.symbol.starts_with(&leader_prefix))
         .map(|r| format!("- {}: korelacja={:.4}, zmienność={:.4}", r.symbol, r.correlation, r.volatility))
         .collect::<Vec<_>>()
         .join("\n")
@@ -193,13 +194,77 @@ fn build_delta_context(
     }
 }
 
+fn market_data_unchanged(
+    current_equity: &[models::AnalyticalReport],
+    current_metals: &models::PreciousMetalsReport,
+    previous: &models::Snapshot,
+) -> bool {
+    const EPS: f64 = 1e-9;
+
+    if current_equity.len() != previous.equity_reports.len() {
+        return false;
+    }
+
+    for curr in current_equity {
+        match previous.equity_reports.iter().find(|p| p.symbol == curr.symbol) {
+            Some(prev_r) => {
+                if (curr.correlation - prev_r.correlation).abs() > EPS
+                    || (curr.volatility - prev_r.volatility).abs() > EPS
+                {
+                    return false;
+                }
+            }
+            None => return false,
+        }
+    }
+
+    if (current_metals.correlation - previous.metals_report.correlation).abs() > EPS
+        || (current_metals.current_gsr - previous.metals_report.current_gsr).abs() > EPS
+    {
+        return false;
+    }
+
+    true
+}
+
 #[tauri::command]
 pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::FullBriefing, String> {
     let equity_reports = get_cross_market_analysis().await?;
     let metals_report = get_precious_metals_analysis().await?;
-    let all_news = news_engine::fetch_all_news().await.unwrap_or_default();
 
     let previous_snapshot = history_store::load_last_snapshot(&app);
+
+    if let Some(prev) = &previous_snapshot {
+        if market_data_unchanged(&equity_reports, &metals_report, prev) {
+            let timestamp = OffsetDateTime::now_utc().unix_timestamp().to_string();
+            let refreshed_snapshot = models::Snapshot {
+                equity_reports: equity_reports.clone(),
+                metals_report: metals_report.clone(),
+                timestamp,
+                slot: slot.clone(),
+            };
+            history_store::save_snapshot(&app, &refreshed_snapshot)?;
+
+            return Ok(models::FullBriefing {
+                slot,
+                compared_to: Some(prev.slot.clone()),
+                equity_reports,
+                metals_report,
+                instrument_briefings: vec![],
+                pine_script_correlation: String::new(),
+                pine_script_correlation_explanation: String::new(),
+                pine_script_gsr: String::new(),
+                pine_script_gsr_explanation: String::new(),
+                is_stale_data: true,
+                stale_data_message: Some(format!(
+                    "Brak nowych danych rynkowych od ostatniej analizy ({}). Yahoo Finance nie opublikował jeszcze nowej świecy dziennej — spróbuj ponownie po otwarciu kolejnej sesji handlowej.",
+                    prev.slot
+                )),
+            });
+        }
+    }
+
+    let all_news = news_engine::fetch_all_news().await.unwrap_or_default();
     let delta_context = build_delta_context(&equity_reports, &metals_report, &previous_snapshot);
     let compared_to = previous_snapshot.as_ref().map(|s| s.slot.clone());
 
@@ -262,7 +327,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
     };
     history_store::save_snapshot(&app, &new_snapshot)?;
 
-    Ok(models::FullBriefing {
+     Ok(models::FullBriefing {
         slot,
         compared_to,
         equity_reports,
@@ -272,6 +337,8 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
         pine_script_correlation_explanation,
         pine_script_gsr,
         pine_script_gsr_explanation,
+        is_stale_data: false,
+        stale_data_message: None,
     })
 }
 
