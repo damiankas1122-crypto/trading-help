@@ -37,3 +37,10 @@ pnpm-debug.log*
 
 # === History / local data generated at runtime ===
 last_snapshot.json
+# === Internal planning (not for public repo) ===
+ROADMAP.md
+
+# === Signing keys (extra safety net, keys live outside the project anyway) ===
+*.key
+*.key.pub
+.tauri/

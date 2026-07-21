@@ -27,6 +27,10 @@ Grab the latest Windows installer (no build required) from the
 - **Session-to-session comparison** — every run is saved locally, so each new
   briefing highlights what changed since the last one (morning vs. afternoon
   vs. evening).
+- **Duplicate-briefing guard** — if market data hasn't actually changed since
+  the last snapshot (e.g. re-running within the same session, or over a
+  weekend), the app skips the AI call entirely and shows a clear notice
+  instead of burning API quota on a near-identical report.
 - **One-click TradingView scripts** — generates and explains Pine Script v6
   indicators for index correlation and the Gold/Silver Ratio, ready to paste
   into TradingView.
@@ -38,7 +42,7 @@ Grab the latest Windows installer (no build required) from the
 | Backend    | Rust, Tauri 2                                |
 | Frontend   | React, TypeScript, Vite, Tailwind CSS         |
 | Market data| Yahoo Finance API                             |
-| AI         | Google Gemini API (`gemini-2.5-flash`)        |
+| AI         | Google Gemini API (`gemini-3.5-flash`)        |
 | News       | RSS feed parsing                              |
 | Storage    | Local JSON snapshot (no external database)    |
 
