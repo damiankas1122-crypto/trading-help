@@ -64,4 +64,8 @@ pub struct FullBriefing {
     pub pine_script_correlation_explanation: String,
     pub pine_script_gsr: String,
     pub pine_script_gsr_explanation: String,
+    #[serde(default)]
+    pub is_stale_data: bool,
+    #[serde(default)]
+    pub stale_data_message: Option<String>,
 }
