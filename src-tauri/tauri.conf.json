@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "trading_help",
+  "productName": "TRADING HELP",
   "version": "0.1.0",
   "identifier": "com.trading.help",
   "build": {
@@ -13,7 +13,7 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "trading_help",
+        "title": "TRADING HELP",
         "width": 1100,
         "height": 850,
         "resizable": true
