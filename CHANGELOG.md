@@ -2,6 +2,17 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.1.3] - 2026-07-22
+
+### Fixed
+- Auto-update was silently failing in production builds because the
+  `updater` and `process` plugin permissions were missing from
+  `src-tauri/capabilities/default.json`. Tauri 2's capability system blocks
+  unlisted plugin commands at the frontend boundary, so `check()` and
+  `downloadAndInstall()` were failing silently (caught and only logged to
+  the console) instead of showing the update banner. Added
+  `updater:default` and `process:default` to the default capability.
+
 ## [0.1.2] - 2026-07-22
 
 ### Added
