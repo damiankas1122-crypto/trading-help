@@ -2,6 +2,14 @@
 
 All notable changes to Trading Help are documented here.
 
+
+## [0.1.4] - 2026-07-22
+
+### Verified
+- Confirmed the auto-update pipeline works end-to-end after the capabilities
+  fix in 0.1.3: an installed 0.1.3 build detects, downloads, verifies, and
+  installs this release automatically via the in-app update banner.
+
 ## [0.1.3] - 2026-07-22
 
 ### Fixed
