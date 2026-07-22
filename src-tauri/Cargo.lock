@@ -4489,7 +4489,7 @@ dependencies = [
 
 [[package]]
 name = "trading_help"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "reqwest 0.11.27",
  "rss",
