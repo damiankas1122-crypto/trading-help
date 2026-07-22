@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { TrendingUp, BarChart3, Coins, Gem, Copy, Check, ChevronDown, ChevronUp, Sunrise, Sun, Moon } from "lucide-react";
+import { check as checkForUpdate, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
+import { TrendingUp, BarChart3, Coins, Gem, Copy, Check, ChevronDown, ChevronUp, Sunrise, Sun, Moon, Download, RefreshCw } from "lucide-react";
 import ThreeBackground from "./ThreeBackground";
 import "./App.css";
 
@@ -96,7 +98,7 @@ function PineScriptSection({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // clipboard niedostępny (np. brak uprawnień) - po prostu nie pokazujemy potwierdzenia
+      // clipboard niedostępny (np. brak uprawnień) 
     }
   };
 
@@ -169,7 +171,115 @@ function EmptyStateFirstRun() {
   );
 }
 
+type UpdateStatus = "idle" | "available" | "downloading" | "ready" | "error";
+
+function useAppUpdater() {
+  const [status, setStatus] = useState<UpdateStatus>("idle");
+  const [progress, setProgress] = useState(0);
+  const [version, setVersion] = useState<string | null>(null);
+  const [updateRef, setUpdateRef] = useState<Update | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    checkForUpdate()
+      .then((update) => {
+        if (update?.available) {
+          setUpdateRef(update);
+          setVersion(update.version);
+          setStatus("available");
+        }
+      })
+      .catch((err) => {
+        // Cichy fail przy sprawdzaniu - brak sieci nie powinien przeszkadzać w normalnym korzystaniu z apki
+        console.warn("Sprawdzanie aktualizacji nie powiodło się:", err);
+      });
+  }, []);
+
+  const downloadAndInstall = async () => {
+    if (!updateRef) return;
+    setStatus("downloading");
+    setErrorMsg(null);
+    let downloaded = 0;
+    let total = 0;
+
+    try {
+      await updateRef.downloadAndInstall((event) => {
+        if (event.event === "Started") {
+          total = event.data.contentLength ?? 0;
+        } else if (event.event === "Progress") {
+          downloaded += event.data.chunkLength;
+          if (total > 0) setProgress(Math.round((downloaded / total) * 100));
+        } else if (event.event === "Finished") {
+          setStatus("ready");
+        }
+      });
+      await relaunch();
+    } catch (err) {
+      console.error("Błąd instalacji aktualizacji:", err);
+      setErrorMsg(String(err));
+      setStatus("error");
+    }
+  };
+
+  return { status, progress, version, errorMsg, downloadAndInstall };
+}
+
+function UpdateBanner({
+  status,
+  progress,
+  version,
+  errorMsg,
+  onUpdate,
+}: {
+  status: UpdateStatus;
+  progress: number;
+  version: string | null;
+  errorMsg: string | null;
+  onUpdate: () => void;
+}) {
+  if (status === "idle") return null;
+
+  return (
+    <div className="bg-cyan-950/40 border border-cyan-700/50 rounded-2xl px-5 py-3 flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center gap-2 text-cyan-300 text-xs font-mono">
+        {status === "available" && (
+          <>
+            <Download size={14} />
+            <span>Dostępna nowa wersja{version ? ` (${version})` : ""}.</span>
+          </>
+        )}
+        {status === "downloading" && (
+          <>
+            <RefreshCw size={14} className="animate-spin" />
+            <span>Pobieranie aktualizacji... {progress}%</span>
+          </>
+        )}
+        {status === "ready" && (
+          <>
+            <Check size={14} />
+            <span>Zainstalowano, uruchamiam ponownie...</span>
+          </>
+        )}
+        {status === "error" && (
+          <span className="text-red-400">
+            Nie udało się zaktualizować{errorMsg ? `: ${errorMsg}` : ""}. Spróbuj ponownie później lub pobierz instalator ręcznie.
+          </span>
+        )}
+      </div>
+      {status === "available" && (
+        <button
+          onClick={onUpdate}
+          className="px-3 py-1.5 rounded bg-cyan-500/20 border border-cyan-500 text-cyan-300 text-xs font-bold uppercase hover:bg-cyan-500/30 transition-colors"
+        >
+          Zaktualizuj teraz
+        </button>
+      )}
+    </div>
+  );
+}
+
 function App() {
+  const updater = useAppUpdater();
   const [briefing, setBriefing] = useState<FullBriefing | null>(null);
   const [lastSnapshot, setLastSnapshot] = useState<Snapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -209,6 +319,14 @@ function App() {
       </header>
 
       <main className="max-w-4xl mx-auto p-6 space-y-6 relative z-[1]">
+        <UpdateBanner
+          status={updater.status}
+          progress={updater.progress}
+          version={updater.version}
+          errorMsg={updater.errorMsg}
+          onUpdate={updater.downloadAndInstall}
+        />
+
         <div className="bg-[#0a0a1a]/60 rounded-2xl border border-cyan-900/30 p-6">
           <div className="flex items-center justify-between mb-4">
             <div>
