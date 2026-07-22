@@ -34,6 +34,9 @@ Grab the latest Windows installer (no build required) from the
 - **One-click TradingView scripts** — generates and explains Pine Script v6
   indicators for index correlation and the Gold/Silver Ratio, ready to paste
   into TradingView.
+- **Signed auto-updates** — the installed app checks GitHub Releases on
+  startup and can download, verify, and install new versions in place, with
+  no manual reinstall needed.
 
 ## Tech stack
 
@@ -121,6 +124,10 @@ The installer will be generated under
 This project is for educational and informational purposes only. Nothing it
 generates constitutes financial advice. Market correlations shown here
 measure linear relationships only and do not predict future price movement.
+
+## Changelog
+
+See [CHANGELOG.md](./CHANGELOG.md) for release history.
 
 ## License
 
