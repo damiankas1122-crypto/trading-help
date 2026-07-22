@@ -40,7 +40,6 @@ struct GeminiCandidate {
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
 }
-
 async fn call_gemini(prompt: String) -> Result<String, String> {
     let api_key = env::var("GEMINI_API_KEY")
         .map_err(|_| "Brak zmiennej środowiskowej GEMINI_API_KEY. Ustaw klucz API Gemini.".to_string())?;
@@ -61,32 +60,52 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
         }],
     };
 
-    let res = client
-        .post(&url)
-        .header("x-goog-api-key", api_key)
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await
-        .map_err(|e| format!("Błąd połączenia z Gemini API: {}", e))?;
+    const MAX_RETRIES: u32 = 3;
+    let mut last_error = String::new();
 
-    if !res.status().is_success() {
+    for attempt in 0..MAX_RETRIES {
+        let res = client
+            .post(&url)
+            .header("x-goog-api-key", &api_key)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| format!("Błąd połączenia z Gemini API: {}", e))?;
+
         let status = res.status();
+
+        if status.is_success() {
+            let parsed: GeminiResponse = res
+                .json()
+                .await
+                .map_err(|e| format!("Błąd parsowania odpowiedzi Gemini: {}", e))?;
+
+            return parsed
+                .candidates
+                .first()
+                .and_then(|c| c.content.parts.first())
+                .map(|p| p.text.trim().to_string())
+                .ok_or_else(|| "Gemini nie zwróciło żadnej treści".to_string());
+        }
+
+        let is_retryable = status.as_u16() == 503 || status.as_u16() == 429;
         let text = res.text().await.unwrap_or_default();
-        return Err(format!("Gemini API zwróciło błąd {}: {}", status, text));
+        last_error = format!("Gemini API zwróciło błąd {}: {}", status, text);
+
+        if is_retryable && attempt + 1 < MAX_RETRIES {
+            let backoff_secs = 2u64.pow(attempt + 1); // 2s, 4s, 8s
+            tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
+            continue;
+        }
+
+        break;
     }
 
-    let parsed: GeminiResponse = res
-        .json()
-        .await
-        .map_err(|e| format!("Błąd parsowania odpowiedzi Gemini: {}", e))?;
-
-    parsed
-        .candidates
-        .first()
-        .and_then(|c| c.content.parts.first())
-        .map(|p| p.text.trim().to_string())
-        .ok_or_else(|| "Gemini nie zwróciło żadnej treści".to_string())
+    Err(format!(
+        "{} (model chwilowo przeciążony po {} próbach - spróbuj ponownie za chwilę)",
+        last_error, MAX_RETRIES
+    ))
 }
 
 fn format_news_lines(news: &[NewsItem]) -> String {
