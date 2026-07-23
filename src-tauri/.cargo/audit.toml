@@ -1,0 +1,21 @@
+# Konfiguracja cargo-audit.
+# Wyjątki tutaj MUSZĄ mieć komentarz z uzasadnieniem i datą do rewizji.
+# Nie dodawać nowego wpisu bez wcześniejszej analizy realnego ryzyka.
+
+[advisories]
+ignore = [
+    # quick-xml 0.39.4 (quadratic runtime / unbounded allocation, HIGH 7.5)
+    # Pochodzi z: plist 1.9.0 -> tauri-utils (wewnętrzna zależność Tauri
+    # do obsługi Info.plist na macOS). NIE jest to zależność RSS/news_engine.rs
+    # (rss/atom_syndication już używają naprawionego quick-xml 0.41.0).
+    # Parser plist nie dostaje żadnych danych z sieci (RSS/Gemini/Yahoo) -
+    # obsługuje wyłącznie metadane bundlowania w toolchainie, więc brak
+    # realnej ścieżki ataku w tej aplikacji.
+    # Nie da się zaktualizować przez cargo update - plist 1.9.0 (najnowsza
+    # wydana wersja na 2026-07-23) ogranicza się do quick-xml "0.39".
+    # REWIZJA: sprawdzić przy każdej aktualizacji Tauri/plist czy fix już
+    # dostępny. Dependabot (patrz .github/dependabot.yml) sam podbije Cargo.lock
+    # gdy tauri-utils/plist wyda nową wersję - wtedy usunąć te dwa wpisy.
+    "RUSTSEC-2026-0194",
+    "RUSTSEC-2026-0195",
+]
