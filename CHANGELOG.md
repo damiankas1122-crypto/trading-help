@@ -3,6 +3,25 @@
 All notable changes to Trading Help are documented here.
 
 
+## [0.1.5] - 2026-07-23
+
+### Added
+- Legal disclaimer footer ("not investment advice") in the app UI, dismissible
+  per session via an "I understand" button.
+
+### Security
+- Restricted the Content Security Policy in `tauri.conf.json` (previously `null`).
+- Removed the unused `shell:allow-open` capability.
+- Pinned all GitHub Actions in the release pipeline to commit SHA instead of
+  floating version tags.
+- Added automated dependency auditing to CI (`npm audit`, `cargo audit`,
+  `gitleaks`), running on every push/PR and weekly on a schedule.
+- Added Dependabot configuration for npm, Cargo, and GitHub Actions updates.
+- Added `SECURITY.md` with a vulnerability reporting policy.
+- Enabled branch and tag protection rules on GitHub to prevent force-pushes
+  and deletion of `main` and release tags.
+
+
 ## [0.1.4] - 2026-07-22
 
 ### Verified
