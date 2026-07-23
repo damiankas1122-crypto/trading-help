@@ -278,6 +278,27 @@ function UpdateBanner({
   );
 }
 
+function DisclaimerFooter() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+
+  return (
+    <footer className="shrink-0 border-t border-cyan-900/50 flex items-center justify-center gap-4 px-6 py-2 bg-[#0a0a1a]/90 backdrop-blur-sm z-10">
+      <p className="text-[11px] text-slate-500 font-mono text-center">
+        Treści generowane przez AI mają charakter wyłącznie informacyjno-edukacyjny i{" "}
+        <span className="text-slate-400 font-semibold">nie stanowią porady inwestycyjnej</span>{" "}
+        ani rekomendacji w rozumieniu przepisów prawa. Decyzje inwestycyjne podejmujesz na własną odpowiedzialność.
+      </p>
+      <button
+        onClick={() => setDismissed(true)}
+        className="shrink-0 px-3 py-1 rounded bg-cyan-500/10 border border-cyan-700/50 text-cyan-400 text-[10px] font-bold uppercase tracking-wider hover:bg-cyan-500/20 transition-colors"
+      >
+        Rozumiem
+      </button>
+    </footer>
+  );
+}
+
 function App() {
   const updater = useAppUpdater();
   const [briefing, setBriefing] = useState<FullBriefing | null>(null);
@@ -308,7 +329,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#05050a] text-white relative">
+    <div className="h-screen bg-[#05050a] text-white relative flex flex-col overflow-hidden">
       <ThreeBackground />
 
       <header className="h-16 border-b border-cyan-900/50 flex items-center justify-between px-6 bg-[#0a0a1a]/70 backdrop-blur-sm sticky top-0 z-10">
@@ -318,7 +339,7 @@ function App() {
         )}
       </header>
 
-      <main className="max-w-4xl mx-auto p-6 space-y-6 relative z-[1]">
+      <main className="max-w-4xl mx-auto p-6 space-y-6 relative z-[1] flex-1 w-full overflow-y-auto">
         <UpdateBanner
           status={updater.status}
           progress={updater.progress}
@@ -441,6 +462,8 @@ function App() {
             : <EmptyStateFirstRun />
         )}
       </main>
+
+      <DisclaimerFooter />
     </div>
   );
 }
