@@ -2,6 +2,26 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.2.0] - 2026-07-24
+
+### Added
+- Secure, in-app Gemini API key onboarding — first-launch screen prompts for
+  the key instead of requiring a manual environment variable
+- API key stored exclusively in the OS-native credential store (Windows
+  Credential Manager) via the `keyring` crate — never exposed to the
+  frontend, never written in plain text
+- "Zmień klucz API" button in the app header to view/replace the stored key
+  at any time without leaving the app
+
+### Changed
+- `ai_engine.rs` no longer reads `GEMINI_API_KEY` from the environment;
+  the key is now read from the OS credential store on every Gemini call
+- README updated to reflect the new onboarding-based key setup, replacing
+  the old environment variable instructions
+
+### Security
+- Gemini API key never touches the JavaScript/frontend layer at any point
+
 
 ## [0.1.5] - 2026-07-23
 
