@@ -39,8 +39,30 @@ struct GeminiCandidate {
 struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
 }
+
+#[derive(Deserialize)]
+struct GeminiErrorDetail {
+    #[serde(rename = "retryDelay")]
+    retry_delay: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GeminiErrorBody {
+    status: Option<String>,
+    details: Option<Vec<GeminiErrorDetail>>,
+}
+
+#[derive(Deserialize)]
+struct GeminiErrorWrapper {
+    error: GeminiErrorBody,
+}
+
+fn is_resource_exhausted_final(message: &str) -> bool {
+    message.starts_with("Przekroczono darmowy limit zapytań Gemini API")
+}
+
 async fn call_gemini(prompt: String) -> Result<String, String> {
-    let api_key =  crate::keychain::get_gemini_api_key()
+    let api_key = crate::keychain::get_gemini_api_key()
         .map_err(|_| "Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).".to_string())?;
 
     let url = format!(
@@ -90,10 +112,31 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
 
         let is_retryable = status.as_u16() == 503 || status.as_u16() == 429;
         let text = res.text().await.unwrap_or_default();
-        last_error = format!("Gemini API zwróciło błąd {}: {}", status, text);
+
+        // Rozpoznaj konkretnie RESOURCE_EXHAUSTED (limit darmowego tieru) i odczytaj
+        // sugerowany retryDelay od Google zamiast pokazywać userowi surowy JSON.
+        let parsed_error: Option<GeminiErrorWrapper> = serde_json::from_str(&text).ok();
+        let is_resource_exhausted = parsed_error
+            .as_ref()
+            .and_then(|w| w.error.status.as_deref())
+            .map(|s| s == "RESOURCE_EXHAUSTED")
+            .unwrap_or(false);
+        let suggested_retry_secs = parsed_error
+            .as_ref()
+            .and_then(|w| w.error.details.as_ref())
+            .and_then(|details| details.iter().find_map(|d| d.retry_delay.as_deref()))
+            .and_then(|s| s.trim_end_matches('s').parse::<f64>().ok());
+
+        last_error = if is_resource_exhausted {
+            "Przekroczono darmowy limit zapytań Gemini API (5 zapytań/minutę). Spróbuj ponownie za chwilę.".to_string()
+        } else {
+            format!("Gemini API zwróciło błąd {}: {}", status, text)
+        };
 
         if is_retryable && attempt + 1 < MAX_RETRIES {
-            let backoff_secs = 2u64.pow(attempt + 1); // 2s, 4s, 8s
+            let backoff_secs = suggested_retry_secs
+                .map(|s| s.ceil() as u64)
+                .unwrap_or_else(|| 2u64.pow(attempt + 1)); // fallback: 2s, 4s, 8s
             tokio::time::sleep(Duration::from_secs(backoff_secs)).await;
             continue;
         }
@@ -101,10 +144,14 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
         break;
     }
 
-    Err(format!(
-        "{} (model chwilowo przeciążony po {} próbach - spróbuj ponownie za chwilę)",
-        last_error, MAX_RETRIES
-    ))
+    if is_resource_exhausted_final(&last_error) {
+        Err(last_error)
+    } else {
+        Err(format!(
+            "{} (model chwilowo przeciążony po {} próbach - spróbuj ponownie za chwilę)",
+            last_error, MAX_RETRIES
+        ))
+    }
 }
 
 fn format_news_lines(news: &[NewsItem]) -> String {
@@ -156,14 +203,12 @@ fn label_to_tv_ticker(label: &str) -> &'static str {
 }
 
 pub fn find_strongest_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
-    reports
-        .iter()
-        .max_by(|a, b| {
-            a.correlation
-                .abs()
-                .partial_cmp(&b.correlation.abs())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        })
+    reports.iter().max_by(|a, b| {
+        a.correlation
+            .abs()
+            .partial_cmp(&b.correlation.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    })
 }
 
 pub fn generate_correlation_pine_script(equity_pair_symbol: &str) -> String {

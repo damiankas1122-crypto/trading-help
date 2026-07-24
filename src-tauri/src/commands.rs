@@ -1,7 +1,8 @@
 // src-tauri/src/commands.rs
 use crate::{models, market_engine, analysis_engine, ai_engine, news_engine, history_store, keychain};
-use tauri::AppHandle;
+use tauri::{AppHandle, Emitter};
 use time::OffsetDateTime;
+use std::time::Duration;  
 
 #[tauri::command]
 pub fn calculate_correlation(data_a: Vec<f64>, data_b: Vec<f64>) -> f64 {
@@ -295,18 +296,48 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
     let (ctx_gold, news_gold) = build_instrument_context("GOLD", &all_news, &equity_reports, &metals_report, &delta_context);
     let (ctx_silver, news_silver) = build_instrument_context("SILVER", &all_news, &equity_reports, &metals_report, &delta_context);
 
-    let (briefing_nasdaq, briefing_sp500, briefing_gold, briefing_silver) = tokio::join!(
-        ai_engine::generate_instrument_briefing("NASDAQ", &ctx_nasdaq, &news_nasdaq),
-        ai_engine::generate_instrument_briefing("SP500", &ctx_sp500, &news_sp500),
-        ai_engine::generate_instrument_briefing("GOLD", &ctx_gold, &news_gold),
-        ai_engine::generate_instrument_briefing("SILVER", &ctx_silver, &news_silver),
-    );
+     // Gemini free tier: limit 5 zapytań/minutę. Sekwencyjne wywołania z odstępem
+    // zamiast 4 równoległych (tokio::join!) - wolniejsze, ale mieszczące się w limicie.
+    // Każdy krok emituje event "briefing-progress", żeby frontend mógł pokazać postęp.
+    const GEMINI_CALL_SPACING: Duration = Duration::from_secs(13);
+    const TOTAL_INSTRUMENTS: u32 = 4;
+
+    let _ = app.emit("briefing-progress", models::BriefingProgress {
+        instrument: "NASDAQ".to_string(),
+        step: 1,
+        total: TOTAL_INSTRUMENTS,
+    });
+    let briefing_nasdaq = ai_engine::generate_instrument_briefing("NASDAQ", &ctx_nasdaq, &news_nasdaq).await?;
+    tokio::time::sleep(GEMINI_CALL_SPACING).await;
+
+    let _ = app.emit("briefing-progress", models::BriefingProgress {
+        instrument: "SP500".to_string(),
+        step: 2,
+        total: TOTAL_INSTRUMENTS,
+    });
+    let briefing_sp500 = ai_engine::generate_instrument_briefing("SP500", &ctx_sp500, &news_sp500).await?;
+    tokio::time::sleep(GEMINI_CALL_SPACING).await;
+
+    let _ = app.emit("briefing-progress", models::BriefingProgress {
+        instrument: "GOLD".to_string(),
+        step: 3,
+        total: TOTAL_INSTRUMENTS,
+    });
+    let briefing_gold = ai_engine::generate_instrument_briefing("GOLD", &ctx_gold, &news_gold).await?;
+    tokio::time::sleep(GEMINI_CALL_SPACING).await;
+
+    let _ = app.emit("briefing-progress", models::BriefingProgress {
+        instrument: "SILVER".to_string(),
+        step: 4,
+        total: TOTAL_INSTRUMENTS,
+    });
+    let briefing_silver = ai_engine::generate_instrument_briefing("SILVER", &ctx_silver, &news_silver).await?;
 
     let instrument_briefings = vec![
-        briefing_nasdaq?,
-        briefing_sp500?,
-        briefing_gold?,
-        briefing_silver?,
+        briefing_nasdaq,
+        briefing_sp500,
+        briefing_gold,
+        briefing_silver,
     ];
 
     let strongest_equity = ai_engine::find_strongest_pair(&equity_reports)
