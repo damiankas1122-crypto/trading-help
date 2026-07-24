@@ -299,6 +299,77 @@ function DisclaimerFooter() {
   );
 }
 
+function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
+  const [apiKey, setApiKey] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    if (!apiKey.trim()) {
+      setError("Wklej swój klucz API Gemini przed zapisaniem.");
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await invoke("save_gemini_api_key", { key: apiKey.trim() });
+      onSaved();
+    } catch (err) {
+      console.error("Błąd zapisu klucza API:", err);
+      setError(String(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="h-screen w-screen bg-[#05050a] text-white flex items-center justify-center p-6">
+      <div className="max-w-md w-full bg-[#0a0a1a]/80 rounded-2xl border border-cyan-900/40 p-8 space-y-5">
+        <div>
+          <h1 className="text-cyan-400 text-lg font-black tracking-[0.15em] uppercase mb-2">
+            Witaj w Trading Help
+          </h1>
+          <p className="text-slate-400 text-sm font-mono leading-relaxed">
+            Aby generować analizy AI, potrzebny jest Twój własny klucz API Google Gemini.
+            Klucz zostanie zapisany bezpiecznie w natywnym magazynie kluczy Twojego systemu
+            i nigdy nie opuści Twojego komputera.
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs text-slate-500 uppercase tracking-wide font-bold">
+            Klucz API Gemini
+          </label>
+          <input
+            type="password"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="AIza..."
+            className="w-full bg-black/40 border border-cyan-900/50 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+          />
+        </div>
+
+        {error && (
+          <p className="text-red-400 text-xs font-mono whitespace-pre-wrap">{error}</p>
+        )}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="w-full px-4 py-2.5 rounded bg-cyan-500/20 border border-cyan-500 text-cyan-300 text-xs font-bold uppercase tracking-wider hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+        >
+          {saving ? "Zapisuję..." : "Zapisz i uruchom aplikację"}
+        </button>
+
+        <p className="text-slate-600 text-[11px] font-mono">
+          Nie masz jeszcze klucza? Wygeneruj go bezpłatnie na{" "}
+          <span className="text-cyan-500">aistudio.google.com/apikey</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const updater = useAppUpdater();
   const [briefing, setBriefing] = useState<FullBriefing | null>(null);
@@ -306,11 +377,18 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
 
   useEffect(() => {
     invoke<Snapshot | null>("get_last_snapshot")
       .then(setLastSnapshot)
       .catch(() => setLastSnapshot(null));
+  }, []);
+
+   useEffect(() => {
+    invoke<boolean>("has_gemini_api_key")
+      .then(setHasApiKey)
+      .catch(() => setHasApiKey(false));
   }, []);
 
   const runFullBriefing = async (slot: string) => {
@@ -328,17 +406,40 @@ function App() {
     }
   };
 
+  if (hasApiKey === null) {
+    return <div className="h-screen w-screen bg-[#05050a]" />;
+  }
+
+  if (hasApiKey === false) {
+    return <ApiKeyOnboarding onSaved={() => setHasApiKey(true)} />;
+  }
+  
   return (
     <div className="h-screen bg-[#05050a] text-white relative flex flex-col overflow-hidden">
       <ThreeBackground />
 
-      <header className="h-16 border-b border-cyan-900/50 flex items-center justify-between px-6 bg-[#0a0a1a]/70 backdrop-blur-sm sticky top-0 z-10">
+     <header className="h-16 border-b border-cyan-900/50 flex items-center justify-between px-6 bg-[#0a0a1a]/70 backdrop-blur-sm sticky top-0 z-10">
         <h1 className="text-xl font-black text-cyan-400 tracking-[0.2em]">TRADING HELP</h1>
-        {lastUpdated && (
-          <span className="text-xs text-slate-500 font-mono">Ostatnia aktualizacja: {lastUpdated}</span>
-        )}
+        <div className="flex items-center gap-4">
+          {lastUpdated && (
+            <span className="text-xs text-slate-500 font-mono">Ostatnia aktualizacja: {lastUpdated}</span>
+          )}
+          <button
+            onClick={async () => {
+              if (!confirm("Usunąć zapisany klucz API i wprowadzić nowy?")) return;
+              try {
+                await invoke("delete_gemini_api_key");
+                setHasApiKey(false);
+              } catch (err) {
+                console.error("Błąd usuwania klucza:", err);
+              }
+            }}
+            className="text-xs text-slate-500 hover:text-cyan-400 font-mono underline underline-offset-2"
+          >
+            Zmień klucz API
+          </button>
+        </div>
       </header>
-
       <main className="max-w-4xl mx-auto p-6 space-y-6 relative z-[1] flex-1 w-full overflow-y-auto">
         <UpdateBanner
           status={updater.status}
