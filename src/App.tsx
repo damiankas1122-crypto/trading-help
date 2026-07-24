@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { check as checkForUpdate, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { TrendingUp, BarChart3, Coins, Gem, Copy, Check, ChevronDown, ChevronUp, Sunrise, Sun, Moon, Download, RefreshCw } from "lucide-react";
@@ -27,6 +28,12 @@ type PreciousMetalsReport = {
 type InstrumentBriefing = {
   instrument: string;
   commentary: string;
+};
+
+type BriefingProgress = {
+  instrument: string;
+  step: number;
+  total: number;
 };
 
 type FullBriefing = {
@@ -378,6 +385,16 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
+  const [progress, setProgress] = useState<BriefingProgress | null>(null);
+
+   useEffect(() => {
+    const unlisten = listen<BriefingProgress>("briefing-progress", (event) => {
+      setProgress(event.payload);
+    });
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, []);
 
   useEffect(() => {
     invoke<Snapshot | null>("get_last_snapshot")
@@ -394,6 +411,7 @@ function App() {
   const runFullBriefing = async (slot: string) => {
     setLoading(true);
     setError(null);
+    setProgress(null);   
     try {
       const result = await invoke<FullBriefing>("get_full_briefing", { slot });
       setBriefing(result);
@@ -403,6 +421,7 @@ function App() {
       setError(String(err));
     } finally {
       setLoading(false);
+      setProgress(null);
     }
   };
 
@@ -481,8 +500,12 @@ function App() {
               <Moon size={14} /> Analiza wieczorna
             </button>
           </div>
-          {loading && (
-            <p className="text-cyan-400 text-xs font-mono mt-3 animate-pulse">Analizuję rynki...</p>
+            {loading && (
+            <p className="text-cyan-400 text-xs font-mono mt-3 animate-pulse">
+              {progress
+                ? `Analizuję ${progress.instrument}... (${progress.step}/${progress.total})`
+                : "Przygotowuję dane rynkowe..."}
+            </p>
           )}
         </div>
 

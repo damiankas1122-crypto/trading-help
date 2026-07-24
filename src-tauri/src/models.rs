@@ -69,3 +69,9 @@ pub struct FullBriefing {
     #[serde(default)]
     pub stale_data_message: Option<String>,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct BriefingProgress {
+    pub instrument: String,
+    pub step: u32,
+    pub total: u32,
+}
