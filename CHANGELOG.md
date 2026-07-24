@@ -2,6 +2,22 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.2.3] - 2026-07-24
+
+### Fixed
+- Gemini free-tier rate limit (429 RESOURCE_EXHAUSTED): parallel `tokio::join!`
+  calls in `get_full_briefing` replaced with sequential calls spaced by
+  `GEMINI_CALL_SPACING`, staying within the 5 requests/minute free-tier limit
+- `call_gemini` now parses Google's structured error response and returns a
+  clear, user-facing Polish message on rate-limit errors instead of raw JSON
+- Retry backoff now honors the `retryDelay` suggested in Google's error
+  response, falling back to the previous fixed 2s/4s/8s schedule when absent
+
+### Added
+- Live briefing progress feedback: backend emits a `briefing-progress` Tauri
+  event before each of the 4 AI calls in `get_full_briefing`; the UI shows
+  "Analizuję NASDAQ... (1/4)" instead of a static "Analizuję rynki..." message
+
 
 # [0.2.2] - 2026-07-24
 

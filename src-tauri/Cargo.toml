@@ -1,6 +1,6 @@
 [package]
 name = "trading_help"
-version = "0.2.2"
+version = "0.2.3"
 description = "A Tauri App"
 authors = ["damiankas1122-crypto"]
 edition = "2021"
