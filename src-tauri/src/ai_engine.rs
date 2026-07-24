@@ -1,7 +1,6 @@
 // src-tauri/src/ai_engine.rs
 use crate::models::{AnalyticalReport, InstrumentBriefing, NewsItem};
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::time::Duration;
 
 const GEMINI_MODEL: &str = "gemini-3.5-flash";
@@ -41,8 +40,8 @@ struct GeminiResponse {
     candidates: Vec<GeminiCandidate>,
 }
 async fn call_gemini(prompt: String) -> Result<String, String> {
-    let api_key = env::var("GEMINI_API_KEY")
-        .map_err(|_| "Brak zmiennej środowiskowej GEMINI_API_KEY. Ustaw klucz API Gemini.".to_string())?;
+    let api_key =  crate::keychain::get_gemini_api_key()
+        .map_err(|_| "Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).".to_string())?;
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
