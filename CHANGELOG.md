@@ -2,6 +2,20 @@
 
 All notable changes to Trading Help are documented here.
 
+
+# [0.2.2] - 2026-07-24
+
+### Fixed
+- Corrected TOML syntax error in Cargo.toml introduced during initial 0.2.0
+  version bump, which caused the v0.2.0 and v0.2.1 release builds to fail
+
+
+## [0.2.1] - 2026-07-24
+
+### Fixed
+- Corrected TOML syntax error in Cargo.toml introduced during 0.2.0 version bump
+
+
 ## [0.2.0] - 2026-07-24
 
 ### Added
