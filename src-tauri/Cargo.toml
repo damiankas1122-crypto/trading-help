@@ -1,6 +1,6 @@
 [package]
 name = "trading_help"
-version = "0.1.5"
+"version": "0.2.0"
 description = "A Tauri App"
 authors = ["damiankas1122-crypto"]
 edition = "2021"
@@ -20,3 +20,5 @@ tokio = { version = "1", features = ["full"] }
 yahoo_finance_api = "2.2"
 time = { version = "0.3", features = ["macros"] }
 rss = "2"
+keyring = { version = "3", features = ["windows-native"] }
+
