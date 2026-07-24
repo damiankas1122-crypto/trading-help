@@ -21,4 +21,6 @@ yahoo_finance_api = "2.2"
 time = { version = "0.3", features = ["macros"] }
 rss = "2"
 keyring = { version = "3", features = ["windows-native"] }
+thiserror = "2"
+async-trait = "0.1"
 

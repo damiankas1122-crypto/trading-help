@@ -2,6 +2,7 @@
 use crate::models::{AnalyticalReport, InstrumentBriefing, NewsItem};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use thiserror::Error;
 
 const GEMINI_MODEL: &str = "gemini-3.5-flash";
 
@@ -57,13 +58,59 @@ struct GeminiErrorWrapper {
     error: GeminiErrorBody,
 }
 
-fn is_resource_exhausted_final(message: &str) -> bool {
-    message.starts_with("Przekroczono darmowy limit zapytań Gemini API")
+/// Typowane błędy silnika AI (Gemini). Zastępuje wcześniejsze Result<T, String>,
+/// gdzie caller musiał zgadywać rodzaj błędu przez parsowanie treści stringa.
+/// Każdy wariant ma czytelny komunikat PL przez #[error(...)] - .to_string()
+/// generuje dokładnie ten sam tekst co dawniej trafiał do usera, więc
+/// zachowanie widoczne dla frontendu się nie zmienia, tylko wewnętrzna
+/// obsługa staje się bezpieczniejsza (dopasowanie po wariancie, nie po tekście).
+#[derive(Error, Debug)]
+pub enum AiEngineError {
+    #[error("Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).")]
+    MissingApiKey,
+
+    #[error("Nie udało się zainicjalizować klienta HTTP: {0}")]
+    ClientBuildFailed(String),
+
+    #[error("Błąd połączenia z Gemini API: {0}")]
+    ConnectionFailed(String),
+
+    #[error("Błąd parsowania odpowiedzi Gemini: {0}")]
+    ResponseParseFailed(String),
+
+    #[error("Gemini nie zwróciło żadnej treści")]
+    EmptyResponse,
+
+    #[error("Przekroczono darmowy limit zapytań Gemini API (5 zapytań/minutę). Spróbuj ponownie za chwilę.")]
+    RateLimitExceeded,
+
+    #[error("Gemini API zwróciło błąd {status}: {body} (model chwilowo przeciążony po {attempts} próbach - spróbuj ponownie za chwilę)")]
+    ApiError {
+        status: u16,
+        body: String,
+        attempts: u32,
+    },
+}
+/// Abstrakcja nad dostawcą AI. Dziś jedyna implementacja to GeminiProvider,
+/// ale to jest właśnie mechanizm potrzebny pod Etap 6 (multi-provider:
+/// Gemini/OpenAI/Claude) - dodanie nowego dostawcy w przyszłości to jedna
+/// nowa implementacja tego trait, zero zmian w generate_instrument_briefing.
+#[async_trait::async_trait]
+pub trait AiProvider: Send + Sync {
+    async fn generate(&self, prompt: String) -> Result<String, AiEngineError>;
 }
 
-async fn call_gemini(prompt: String) -> Result<String, String> {
-    let api_key = crate::keychain::get_gemini_api_key()
-        .map_err(|_| "Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).".to_string())?;
+pub struct GeminiProvider;
+
+#[async_trait::async_trait]
+impl AiProvider for GeminiProvider {
+    async fn generate(&self, prompt: String) -> Result<String, AiEngineError> {
+        call_gemini(prompt).await
+    }
+}
+
+async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
+    let api_key = crate::keychain::get_gemini_api_key().map_err(|_| AiEngineError::MissingApiKey)?;
 
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
@@ -73,7 +120,7 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(90))
         .build()
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| AiEngineError::ClientBuildFailed(e.to_string()))?;
 
     let body = GeminiRequest {
         contents: vec![GeminiContent {
@@ -82,7 +129,7 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
     };
 
     const MAX_RETRIES: u32 = 3;
-    let mut last_error = String::new();
+    let mut last_error: Option<AiEngineError> = None;
 
     for attempt in 0..MAX_RETRIES {
         let res = client
@@ -92,7 +139,7 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
             .json(&body)
             .send()
             .await
-            .map_err(|e| format!("Błąd połączenia z Gemini API: {}", e))?;
+            .map_err(|e| AiEngineError::ConnectionFailed(e.to_string()))?;
 
         let status = res.status();
 
@@ -100,14 +147,14 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
             let parsed: GeminiResponse = res
                 .json()
                 .await
-                .map_err(|e| format!("Błąd parsowania odpowiedzi Gemini: {}", e))?;
+                .map_err(|e| AiEngineError::ResponseParseFailed(e.to_string()))?;
 
             return parsed
                 .candidates
                 .first()
                 .and_then(|c| c.content.parts.first())
                 .map(|p| p.text.trim().to_string())
-                .ok_or_else(|| "Gemini nie zwróciło żadnej treści".to_string());
+                .ok_or(AiEngineError::EmptyResponse);
         }
 
         let is_retryable = status.as_u16() == 503 || status.as_u16() == 429;
@@ -127,11 +174,15 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
             .and_then(|details| details.iter().find_map(|d| d.retry_delay.as_deref()))
             .and_then(|s| s.trim_end_matches('s').parse::<f64>().ok());
 
-        last_error = if is_resource_exhausted {
-            "Przekroczono darmowy limit zapytań Gemini API (5 zapytań/minutę). Spróbuj ponownie za chwilę.".to_string()
+        last_error = Some(if is_resource_exhausted {
+            AiEngineError::RateLimitExceeded
         } else {
-            format!("Gemini API zwróciło błąd {}: {}", status, text)
-        };
+            AiEngineError::ApiError {
+                status: status.as_u16(),
+                body: text,
+                attempts: attempt + 1,
+            }
+        });
 
         if is_retryable && attempt + 1 < MAX_RETRIES {
             let backoff_secs = suggested_retry_secs
@@ -144,14 +195,14 @@ async fn call_gemini(prompt: String) -> Result<String, String> {
         break;
     }
 
-    if is_resource_exhausted_final(&last_error) {
-        Err(last_error)
-    } else {
-        Err(format!(
-            "{} (model chwilowo przeciążony po {} próbach - spróbuj ponownie za chwilę)",
-            last_error, MAX_RETRIES
-        ))
-    }
+    // RateLimitExceeded nie dostaje dopisanego "(model przeciążony po N próbach)"
+    // w treści - to osobny, jednoznaczny wariant, nie trzeba już tego odróżniać
+    // przez string-matching (jak w usuniętym is_resource_exhausted_final).
+    Err(last_error.unwrap_or(AiEngineError::ApiError {
+        status: 0,
+        body: "Nieznany błąd Gemini API".to_string(),
+        attempts: MAX_RETRIES,
+    }))
 }
 
 fn format_news_lines(news: &[NewsItem]) -> String {
@@ -166,10 +217,11 @@ fn format_news_lines(news: &[NewsItem]) -> String {
 
 /// Generuje OBSZERNĄ, osobną analizę jednego instrumentu.
 pub async fn generate_instrument_briefing(
+    provider: &dyn AiProvider,
     instrument: &str,
     numeric_context: &str,
     news: &[NewsItem],
-) -> Result<InstrumentBriefing, String> {
+) -> Result<InstrumentBriefing, AiEngineError> {
     let news_lines = format_news_lines(news);
 
     let prompt = format!(
@@ -186,7 +238,7 @@ pub async fn generate_instrument_briefing(
          markdown ani kodu - tylko czysty tekst podzielony na akapity."
     );
 
-    let commentary = call_gemini(prompt).await?;
+    let commentary = provider.generate(prompt).await?;
 
     Ok(InstrumentBriefing {
         instrument: instrument.to_string(),
@@ -304,4 +356,59 @@ pub fn explain_gsr_script() -> String {
      złota. Oba progi możesz dowolnie zmienić w ustawieniach wskaźnika, żeby dopasować je do \
      własnej analizy historycznej - to tylko orientacyjne wartości domyślne, nie sztywna reguła."
         .to_string()
+}
+
+#[cfg(test)]
+mod find_strongest_pair_tests {
+    use super::*;
+
+    fn report(symbol: &str, correlation: f64) -> AnalyticalReport {
+        AnalyticalReport {
+            symbol: symbol.to_string(),
+            correlation,
+            volatility: 0.0,
+            sentiment_impact: 0.0,
+            timestamp: "2026-01-01".to_string(),
+        }
+    }
+
+    #[test]
+    fn picks_report_with_highest_absolute_correlation() {
+        let reports = vec![
+            report("NASDAQ->SP500", 0.2),
+            report("SP500->NASDAQ", 0.85),
+            report("GOLD->SILVER", -0.4),
+        ];
+
+        let strongest = find_strongest_pair(&reports).expect("powinien znaleźć raport");
+        assert_eq!(strongest.symbol, "SP500->NASDAQ");
+    }
+
+    #[test]
+    fn negative_correlation_with_larger_magnitude_beats_smaller_positive() {
+        let reports = vec![
+            report("NASDAQ->SP500", 0.3),
+            report("GOLD->SILVER", -0.9),
+        ];
+
+        let strongest = find_strongest_pair(&reports).expect("powinien znaleźć raport");
+        assert_eq!(strongest.symbol, "GOLD->SILVER");
+    }
+
+    #[test]
+    fn does_not_panic_when_correlation_is_nan() {
+        let reports = vec![
+            report("NASDAQ->SP500", f64::NAN),
+            report("SP500->NASDAQ", 0.5),
+        ];
+
+        let result = find_strongest_pair(&reports);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn returns_none_for_empty_reports() {
+        let reports: Vec<AnalyticalReport> = vec![];
+        assert!(find_strongest_pair(&reports).is_none());
+    }
 }

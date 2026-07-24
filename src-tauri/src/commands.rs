@@ -2,7 +2,31 @@
 use crate::{models, market_engine, analysis_engine, ai_engine, news_engine, history_store, keychain};
 use tauri::{AppHandle, Emitter};
 use time::OffsetDateTime;
-use std::time::Duration;  
+use std::time::Duration;
+use thiserror::Error;
+
+/// Typowane błędy warstwy komend Tauri. Zastępuje wcześniejsze Result<T, String>
+/// przekazywane bezpośrednio z niższych warstw (market_engine, history_store, ai_engine),
+/// co zmuszało do zgadywania rodzaju błędu po treści stringa. Publiczne komendy
+/// #[tauri::command] nadal zwracają Result<T, String> do frontendu (kontrakt IPC
+/// bez zmian) - stringifikacja dzieje się w jednym miejscu, na samym końcu.
+#[derive(Error, Debug)]
+pub enum CommandError {
+    #[error("Błąd pobierania danych rynkowych: {0}")]
+    MarketData(String),
+
+    #[error(transparent)]
+    Ai(#[from] ai_engine::AiEngineError),
+
+    #[error("Błąd zapisu/odczytu lokalnej historii: {0}")]
+    Storage(String),
+
+    #[error("Błąd magazynu kluczy systemu: {0}")]
+    Keychain(String),
+
+    #[error("Brak danych do analizy indeksów")]
+    NoStrongestPair,
+}
 
 #[tauri::command]
 pub fn calculate_correlation(data_a: Vec<f64>, data_b: Vec<f64>) -> f64 {
@@ -53,17 +77,43 @@ fn align_and_correlate_lagged(leader: &[f64], follower: &[f64], lag: usize) -> f
     calculate_correlation(leader_slice, follower_slice)
 }
 
+/// Buduje pojedynczy AnalyticalReport dla pary leader/follower.
+/// Wydzielone z get_cross_market_analysis, żeby dało się to przetestować
+/// bez sieci (get_cross_market_analysis_inner robi fetch z Yahoo Finance).
+fn build_pair_report(
+    leader_label: &str,
+    leader_data: &[models::MarketData],
+    leader_closes: &[f64],
+    follower_label: &str,
+    follower_closes: &[f64],
+    timestamp: &str,
+) -> models::AnalyticalReport {
+    let leader_returns = to_returns(leader_closes);
+    let follower_returns = to_returns(follower_closes);
+    let correlation = align_and_correlate_lagged(&leader_returns, &follower_returns, DEFAULT_LAG);
+    // Regresja: zmienność MUSI pochodzić z danych leadera, nie followera -
+    // to był kiedyś zamieniony argument (bug w get_cross_market_analysis).
+    let volatility = analysis_engine::calculate_volatility(leader_data);
+
+    models::AnalyticalReport {
+        symbol: format!("{}->{}", leader_label, follower_label),
+        correlation,
+        volatility,
+        sentiment_impact: 0.0,
+        timestamp: timestamp.to_string(),
+    }
+}
+
 const DEFAULT_LAG: usize = 1;
 
-#[tauri::command]
-pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>, String> {
+async fn get_cross_market_analysis_inner() -> Result<Vec<models::AnalyticalReport>, CommandError> {
     let (nasdaq, sp500) = tokio::join!(
         market_engine::fetch_market_data("^IXIC"),
         market_engine::fetch_market_data("^GSPC"),
     );
 
-    let nasdaq = nasdaq?;
-    let sp500 = sp500?;
+    let nasdaq = nasdaq.map_err(CommandError::MarketData)?;
+    let sp500 = sp500.map_err(CommandError::MarketData)?;
 
     let markets: Vec<(&str, &Vec<models::MarketData>, Vec<f64>)> = vec![
         ("NASDAQ", &nasdaq, nasdaq.iter().map(|d| d.close).collect()),
@@ -73,23 +123,19 @@ pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>
     let timestamp = OffsetDateTime::now_utc().unix_timestamp().to_string();
     let mut reports = Vec::new();
 
-     for (leader_label, leader_data, leader_closes) in &markets {
+    for (leader_label, leader_data, leader_closes) in &markets {
         for (follower_label, _follower_data, follower_closes) in &markets {
             if leader_label == follower_label {
                 continue;
             }
-            let leader_returns = to_returns(leader_closes);
-            let follower_returns = to_returns(follower_closes);
-            let correlation = align_and_correlate_lagged(&leader_returns, &follower_returns, DEFAULT_LAG);
-            let volatility = analysis_engine::calculate_volatility(leader_data);
-
-            reports.push(models::AnalyticalReport {
-                symbol: format!("{}->{}", leader_label, follower_label),
-                correlation,
-                volatility,
-                sentiment_impact: 0.0,
-                timestamp: timestamp.clone(),
-            });
+            reports.push(build_pair_report(
+                leader_label,
+                leader_data,
+                leader_closes,
+                follower_label,
+                follower_closes,
+                &timestamp,
+            ));
         }
     }
 
@@ -97,14 +143,20 @@ pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>
 }
 
 #[tauri::command]
-pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsReport, String> {
+pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>, String> {
+    get_cross_market_analysis_inner()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+async fn get_precious_metals_analysis_inner() -> Result<models::PreciousMetalsReport, CommandError> {
     let (gold, silver) = tokio::join!(
         market_engine::fetch_market_data("GC=F"),
         market_engine::fetch_market_data("SI=F"),
     );
 
-    let gold = gold?;
-    let silver = silver?;
+    let gold = gold.map_err(CommandError::MarketData)?;
+    let silver = silver.map_err(CommandError::MarketData)?;
 
     let gold_closes: Vec<f64> = gold.iter().map(|d| d.close).collect();
     let silver_closes: Vec<f64> = silver.iter().map(|d| d.close).collect();
@@ -141,6 +193,13 @@ pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsRepo
         silver_volatility,
         timestamp,
     })
+}
+
+#[tauri::command]
+pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsReport, String> {
+    get_precious_metals_analysis_inner()
+        .await
+        .map_err(|e| e.to_string())
 }
 
 fn numeric_context_for_equity(instrument: &str, reports: &[models::AnalyticalReport]) -> String {
@@ -228,10 +287,9 @@ fn market_data_unchanged(
     true
 }
 
-#[tauri::command]
-pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::FullBriefing, String> {
-    let equity_reports = get_cross_market_analysis().await?;
-    let metals_report = get_precious_metals_analysis().await?;
+async fn get_full_briefing_inner(app: AppHandle, slot: String) -> Result<models::FullBriefing, CommandError> {
+    let equity_reports = get_cross_market_analysis_inner().await?;
+    let metals_report = get_precious_metals_analysis_inner().await?;
 
     let previous_snapshot = history_store::load_last_snapshot(&app);
 
@@ -244,7 +302,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
                 timestamp,
                 slot: slot.clone(),
             };
-            history_store::save_snapshot(&app, &refreshed_snapshot)?;
+            history_store::save_snapshot(&app, &refreshed_snapshot).map_err(CommandError::Storage)?;
 
             return Ok(models::FullBriefing {
                 slot,
@@ -296,18 +354,20 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
     let (ctx_gold, news_gold) = build_instrument_context("GOLD", &all_news, &equity_reports, &metals_report, &delta_context);
     let (ctx_silver, news_silver) = build_instrument_context("SILVER", &all_news, &equity_reports, &metals_report, &delta_context);
 
-     // Gemini free tier: limit 5 zapytań/minutę. Sekwencyjne wywołania z odstępem
+    // Gemini free tier: limit 5 zapytań/minutę. Sekwencyjne wywołania z odstępem
     // zamiast 4 równoległych (tokio::join!) - wolniejsze, ale mieszczące się w limicie.
     // Każdy krok emituje event "briefing-progress", żeby frontend mógł pokazać postęp.
     const GEMINI_CALL_SPACING: Duration = Duration::from_secs(13);
     const TOTAL_INSTRUMENTS: u32 = 4;
-
+  // Konstruujemy providera raz - dziś zawsze Gemini, ale to jest miejsce,
+    // które w Etapie 6 wybierze dostawcę na podstawie ustawień użytkownika.
+    let ai_provider: Box<dyn ai_engine::AiProvider> = Box::new(ai_engine::GeminiProvider);
     let _ = app.emit("briefing-progress", models::BriefingProgress {
         instrument: "NASDAQ".to_string(),
         step: 1,
         total: TOTAL_INSTRUMENTS,
     });
-    let briefing_nasdaq = ai_engine::generate_instrument_briefing("NASDAQ", &ctx_nasdaq, &news_nasdaq).await?;
+    let briefing_nasdaq = ai_engine::generate_instrument_briefing(ai_provider.as_ref(), "NASDAQ", &ctx_nasdaq, &news_nasdaq).await?;
     tokio::time::sleep(GEMINI_CALL_SPACING).await;
 
     let _ = app.emit("briefing-progress", models::BriefingProgress {
@@ -315,7 +375,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
         step: 2,
         total: TOTAL_INSTRUMENTS,
     });
-    let briefing_sp500 = ai_engine::generate_instrument_briefing("SP500", &ctx_sp500, &news_sp500).await?;
+    let briefing_sp500 = ai_engine::generate_instrument_briefing(ai_provider.as_ref(), "SP500", &ctx_sp500, &news_sp500).await?;
     tokio::time::sleep(GEMINI_CALL_SPACING).await;
 
     let _ = app.emit("briefing-progress", models::BriefingProgress {
@@ -323,7 +383,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
         step: 3,
         total: TOTAL_INSTRUMENTS,
     });
-    let briefing_gold = ai_engine::generate_instrument_briefing("GOLD", &ctx_gold, &news_gold).await?;
+    let briefing_gold = ai_engine::generate_instrument_briefing(ai_provider.as_ref(), "GOLD", &ctx_gold, &news_gold).await?;
     tokio::time::sleep(GEMINI_CALL_SPACING).await;
 
     let _ = app.emit("briefing-progress", models::BriefingProgress {
@@ -331,7 +391,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
         step: 4,
         total: TOTAL_INSTRUMENTS,
     });
-    let briefing_silver = ai_engine::generate_instrument_briefing("SILVER", &ctx_silver, &news_silver).await?;
+    let briefing_silver = ai_engine::generate_instrument_briefing(ai_provider.as_ref(), "SILVER", &ctx_silver, &news_silver).await?;
 
     let instrument_briefings = vec![
         briefing_nasdaq,
@@ -341,7 +401,7 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
     ];
 
     let strongest_equity = ai_engine::find_strongest_pair(&equity_reports)
-        .ok_or_else(|| "Brak danych do analizy indeksów".to_string())?;
+        .ok_or(CommandError::NoStrongestPair)?;
 
     let pine_script_correlation = ai_engine::generate_correlation_pine_script(&strongest_equity.symbol);
     let pine_script_correlation_explanation = ai_engine::explain_correlation_script(&strongest_equity.symbol);
@@ -356,9 +416,9 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
         timestamp,
         slot: slot.clone(),
     };
-    history_store::save_snapshot(&app, &new_snapshot)?;
+    history_store::save_snapshot(&app, &new_snapshot).map_err(CommandError::Storage)?;
 
-     Ok(models::FullBriefing {
+    Ok(models::FullBriefing {
         slot,
         compared_to,
         equity_reports,
@@ -374,13 +434,20 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
 }
 
 #[tauri::command]
+pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::FullBriefing, String> {
+    get_full_briefing_inner(app, slot)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn get_last_snapshot(app: AppHandle) -> Option<models::Snapshot> {
     history_store::load_last_snapshot(&app)
 }
 
 #[tauri::command]
 pub fn save_gemini_api_key(key: String) -> Result<(), String> {
-    keychain::save_gemini_api_key(&key)
+    keychain::save_gemini_api_key(&key).map_err(|e| CommandError::Keychain(e).to_string())
 }
 
 #[tauri::command]
@@ -390,5 +457,54 @@ pub fn has_gemini_api_key() -> bool {
 
 #[tauri::command]
 pub fn delete_gemini_api_key() -> Result<(), String> {
-    keychain::delete_gemini_api_key()
+    keychain::delete_gemini_api_key().map_err(|e| CommandError::Keychain(e).to_string())
+}
+
+#[cfg(test)]
+mod build_pair_report_tests {
+    use super::*;
+
+    fn candle(close: f64) -> models::MarketData {
+        models::MarketData {
+            symbol: "TEST".to_string(),
+            time: "2026-01-01".to_string(),
+            open: close,
+            high: close,
+            low: close,
+            close,
+        }
+    }
+
+    #[test]
+    fn volatility_comes_from_leader_not_follower() {
+        let leader_data = vec![candle(100.0), candle(110.0), candle(90.0), candle(105.0)];
+        let follower_data = vec![candle(100.0), candle(100.5), candle(99.5), candle(100.0)];
+
+        let leader_closes: Vec<f64> = leader_data.iter().map(|d| d.close).collect();
+        let follower_closes: Vec<f64> = follower_data.iter().map(|d| d.close).collect();
+
+        let report = build_pair_report(
+            "NASDAQ",
+            &leader_data,
+            &leader_closes,
+            "SP500",
+            &follower_closes,
+            "2026-01-01",
+        );
+
+        let expected_leader_volatility = analysis_engine::calculate_volatility(&leader_data);
+        let follower_volatility = analysis_engine::calculate_volatility(&follower_data);
+
+        assert!((report.volatility - expected_leader_volatility).abs() < 1e-9);
+        assert!((report.volatility - follower_volatility).abs() > 1e-9);
+    }
+
+    #[test]
+    fn symbol_format_is_leader_arrow_follower() {
+        let data = vec![candle(100.0), candle(101.0)];
+        let closes: Vec<f64> = data.iter().map(|d| d.close).collect();
+
+        let report = build_pair_report("GOLD", &data, &closes, "SILVER", &closes, "2026-01-01");
+        assert_eq!(report.symbol, "GOLD->SILVER");
+    }
 }
