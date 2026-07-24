@@ -6,6 +6,7 @@ pub mod ai_engine;
 pub mod news_engine;
 pub mod history_store;
 pub mod commands;
+pub mod keychain;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -18,7 +19,10 @@ pub fn run() {
              commands::get_cross_market_analysis,
              commands::get_precious_metals_analysis,
              commands::get_full_briefing,
-             commands::get_last_snapshot
+             commands::get_last_snapshot,
+             commands::save_gemini_api_key,
+             commands::has_gemini_api_key,
+             commands::delete_gemini_api_key
         ])
         .run(tauri::generate_context!())
         .expect("Błąd uruchamiania aplikacji");

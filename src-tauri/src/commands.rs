@@ -1,5 +1,5 @@
 // src-tauri/src/commands.rs
-use crate::{models, market_engine, analysis_engine, ai_engine, news_engine, history_store};
+use crate::{models, market_engine, analysis_engine, ai_engine, news_engine, history_store, keychain};
 use tauri::AppHandle;
 use time::OffsetDateTime;
 
@@ -345,4 +345,19 @@ pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::F
 #[tauri::command]
 pub fn get_last_snapshot(app: AppHandle) -> Option<models::Snapshot> {
     history_store::load_last_snapshot(&app)
+}
+
+#[tauri::command]
+pub fn save_gemini_api_key(key: String) -> Result<(), String> {
+    keychain::save_gemini_api_key(&key)
+}
+
+#[tauri::command]
+pub fn has_gemini_api_key() -> bool {
+    keychain::has_gemini_api_key()
+}
+
+#[tauri::command]
+pub fn delete_gemini_api_key() -> Result<(), String> {
+    keychain::delete_gemini_api_key()
 }
