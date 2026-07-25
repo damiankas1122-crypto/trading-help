@@ -6,9 +6,9 @@ use time::{Duration, OffsetDateTime};
 pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, String> {
     let provider = yf::YahooConnector::new().map_err(|e| e.to_string())?;
 
-    // Pobieramy dane z ostatnich 30 dni
+    // 90 dni (~63 sesje) - MACD(12,26,9) potrzebuje min ~34 punktów na linię sygnału
     let end = OffsetDateTime::now_utc();
-    let start = end - Duration::days(30);
+    let start = end - Duration::days(90);
 
     let response = provider
         .get_quote_history(symbol, start, end)
@@ -27,6 +27,7 @@ pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, String> 
             MarketData {
                 symbol: symbol.to_string(),
                 time: date,
+                timestamp: q.timestamp as i64,
                 open: q.open,
                 high: q.high,
                 low: q.low,

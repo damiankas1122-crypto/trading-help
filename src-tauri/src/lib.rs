@@ -5,6 +5,8 @@ pub mod analysis_engine;
 pub mod ai_engine;
 pub mod news_engine;
 pub mod history_store;
+pub mod tactic_engine;
+pub mod tactic_store;
 pub mod commands;
 pub mod keychain;
 
@@ -19,6 +21,8 @@ pub fn run() {
              commands::get_cross_market_analysis,
              commands::get_precious_metals_analysis,
              commands::get_full_briefing,
+             commands::generate_trading_tactic,
+             commands::get_tactic_track_record,
              commands::get_last_snapshot,
              commands::save_gemini_api_key,
              commands::has_gemini_api_key,
