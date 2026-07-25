@@ -39,6 +39,7 @@ pnpm-debug.log*
 last_snapshot.json
 # === Internal planning (not for public repo) ===
 ROADMAP.md
+ROADMAP_ARCHIVE.md
 
 # === Signing keys (extra safety net, keys live outside the project anyway) ===
 *.key
