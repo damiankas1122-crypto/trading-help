@@ -21,11 +21,31 @@ needed after the first install.
   and S&P 500 returns, so you can see which index tends to lead the other.
 - **Precious metals analysis** — tracks the Gold/Silver Ratio (GSR) over a
   30-day window, including its correlation and rate of change.
+- **Technical indicators** — RSI (Wilder's, 14-period) and MACD (12/26/9) are
+  computed for every instrument and fed directly into the AI commentary.
+- **Real news sentiment** — each instrument gets a numeric sentiment score
+  (-1 to 1) derived from the same news actually shown in its briefing, not a
+  generic market-wide mood.
 - **Live news integration** — pulls a financial RSS feed and filters it by
   instrument, so market commentary is grounded in what's actually being
   reported.
 - **AI-generated briefings** — combines the numeric analysis with relevant
   news into a readable, per-instrument summary (via the Google Gemini API).
+- **AI explainability** — every claim in a briefing links back to a specific
+  piece of evidence: either an exact numeric input (RSI, MACD, correlation)
+  or a real news headline. News citations are only shown when they match an
+  actual headline from the feed — the AI can never fabricate a source.
+- **Dynamic Pine Script signals** — the AI picks which of three hand-written,
+  pre-validated Pine Script variants (uptrend / downtrend / consolidation)
+  fits each instrument's current RSI/MACD reading, so the generated indicator
+  always matches the written analysis.
+- **On-demand trading tactics** — generate a bull/bear/neutral scenario for
+  any instrument, with target/stop levels and a plain-language rationale.
+  Always shown with a fixed, non-AI-generated legal disclaimer.
+- **Transparent, immutable backtesting** — every generated tactic is
+  automatically checked against real market data 24h and 7 days later. The
+  displayed accuracy track record is built exclusively from outcomes that
+  have actually been verified — never from self-reported or editable results.
 - **Session-to-session comparison** — every run is saved locally, so each new
   briefing highlights what changed since the last one (morning vs. afternoon
   vs. evening).
@@ -104,21 +124,38 @@ npm run tauri build
 The installer will be generated under `src-tauri/target/release/bundle/`.
 
 ## Project structure
-├── src/ # React frontend
-│ ├── App.tsx # Main UI and state
-│ ├── ThreeBackground.tsx # Animated 3D background
-│ └── ...
-├── src-tauri/ # Rust backend
-│ └── src/
-│ ├── commands.rs # Tauri commands exposed to the frontend
-│ ├── market_engine.rs # Yahoo Finance data fetching
-│ ├── analysis_engine.rs # Correlation & volatility calculations
-│ ├── ai_engine.rs # Gemini API integration & Pine Script generation
-│ ├── news_engine.rs # RSS fetching & filtering
-│ ├── history_store.rs # Local snapshot persistence
-│ ├── keychain.rs # Secure API key storage (OS credential store)
-│ └── models.rs # Shared data structures
-└── ...
+
+```
+src/                       # React frontend
+├── App.tsx                # Root component, top-level state, layout
+├── types.ts               # Shared TypeScript types (mirrors Rust models)
+├── constants.tsx          # Icons, scenario labels/styles
+├── utils/                 # Small pure helpers (formatting, clipboard)
+├── hooks/                 # useAppUpdater (auto-update lifecycle)
+├── components/            # One component per file (InstrumentCard, PineScriptSection, ...)
+└── ThreeBackground.tsx    # Animated 3D background
+
+src-tauri/                 # Rust backend
+└── src/
+    ├── commands/             # Tauri commands exposed to the frontend
+    │   ├── cross_market.rs     # Equity correlation (NASDAQ<->SP500)
+    │   ├── precious_metals.rs  # Gold/Silver Ratio, metals correlation
+    │   ├── briefing.rs         # Full briefing orchestration
+    │   └── tactics.rs          # On-demand trading tactics + track record
+    ├── ai_engine/             # Gemini integration
+    │   ├── gemini_client.rs    # HTTP client, retry/backoff
+    │   ├── correlation_pine.rs # Pine Script for correlation/GSR
+    │   ├── briefing.rs         # Per-instrument analysis, Pine Script variants, citations
+    │   └── tactic.rs           # Trading tactic generation
+    ├── market_engine.rs      # Yahoo Finance data fetching
+    ├── analysis_engine.rs    # Correlation, volatility, RSI, MACD
+    ├── tactic_engine.rs      # Backtesting logic for generated trading tactics
+    ├── tactic_store.rs       # Persistent, append-only storage for tracked tactics
+    ├── news_engine.rs        # RSS fetching & filtering
+    ├── history_store.rs      # Local snapshot persistence
+    ├── keychain.rs           # Secure API key storage (OS credential store)
+    └── models.rs             # Shared data structures
+```
 
 ## Security
 

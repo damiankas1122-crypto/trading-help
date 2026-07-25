@@ -2,6 +2,57 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.3.0] - 2026-07-25
+
+### Added
+- Technical indicators: RSI (Wilder's, 14-period) and MACD (12/26/9) computed
+  for every instrument and fed directly into the AI commentary
+- Real per-instrument news sentiment scoring (-1 to 1), replacing the
+  previous placeholder that was always 0
+- AI-selected dynamic Pine Script signal variants (uptrend / downtrend /
+  consolidation) per instrument — the AI picks only the variant name based on
+  RSI/MACD; the code renders one of three hand-written, pre-validated
+  templates, so the generated script is always syntactically valid
+- On-demand trading tactic generation: bull/bear/neutral scenario with
+  target/stop levels and a plain-language rationale for any instrument,
+  always shown with a fixed, non-AI-generated legal disclaimer
+- Transparent, immutable backtesting of generated tactics: every tactic is
+  automatically checked against real market data 24h and 7 days later, and
+  the displayed accuracy track record is built exclusively from outcomes
+  that have actually been verified
+- AI explainability: citations link specific claims in a briefing to either
+  an exact numeric input (RSI, MACD, correlation) or a real news headline —
+  a citation is only shown when its headline matches the news feed exactly,
+  so the AI can never fabricate a source
+
+### Changed
+- Yahoo Finance fetch window increased from 30 to 90 days, since MACD(12,26,9)
+  needs at least ~34 data points to compute a signal line
+- Gold/Silver Ratio "30 days ago" comparison now finds the candle closest to
+  that actual date instead of assuming it's the first candle in the fetch
+  window (which stopped being true once the window grew to 90 days)
+- Internal code quality: added regression tests, `thiserror`-based typed
+  errors (`AiEngineError`, `CommandError`), and an `AiProvider` trait laying
+  the groundwork for multi-provider AI support
+- Refactored `App.tsx` (470 → 235 lines) into `types.ts`, `constants.tsx`,
+  `utils/`, `hooks/`, and one component per file under `components/` — no
+  behavior change
+- Refactored `ai_engine.rs` and `commands.rs` (~840 and ~660 lines) into
+  `ai_engine/` and `commands/` module directories, split by responsibility
+  with one-directional dependencies and typed errors preserved — no behavior
+  change
+
+### Fixed
+- AI prompts no longer claim an indicator "crossed" a threshold — the
+  numeric data passed to the model is a single snapshot with no history, so
+  that language implied information the model didn't actually have
+- Trading tactic entry level is now shown as "at current price" instead of a
+  misleading, falsely-precise "+0.00%"
+
+### Security
+- Bumped `postcss` to 8.5.23, fixing GHSA-r28c-9q8g-f849 (path traversal via
+  `sourceMappingURL`, high severity)
+
 ## [0.2.3] - 2026-07-24
 
 ### Fixed
