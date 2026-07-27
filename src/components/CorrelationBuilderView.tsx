@@ -1,0 +1,96 @@
+import { useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import type { AnalyticalReport } from "../types";
+import { Panel } from "./Panel";
+
+export function CorrelationBuilderView() {
+  const [tickerA, setTickerA] = useState("");
+  const [tickerB, setTickerB] = useState("");
+  const [result, setResult] = useState<AnalyticalReport | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const compute = async () => {
+    if (!tickerA.trim() || !tickerB.trim()) {
+      setError("Podaj oba tickery.");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    try {
+      const report = await invoke<AnalyticalReport>("get_custom_pair_correlation", {
+        tickerA: tickerA.trim(),
+        tickerB: tickerB.trim(),
+      });
+      setResult(report);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Panel title="Konstruktor par korelacji">
+        <p className="text-xs text-term-dim mb-3">
+          Dowolna para tickerów Yahoo Finance (np. AAPL, ^IXIC, GC=F) - niezależnie od watchlisty.
+        </p>
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-xs font-mono">
+            <span className="block text-term-faint uppercase tracking-wide mb-1">Ticker A</span>
+            <input
+              value={tickerA}
+              onChange={(e) => setTickerA(e.target.value)}
+              placeholder="np. AAPL"
+              className="bg-black border border-term-line-strong px-2.5 py-1.5 text-sm text-term-text focus:outline-none focus:border-term-amber w-32"
+            />
+          </label>
+          <label className="text-xs font-mono">
+            <span className="block text-term-faint uppercase tracking-wide mb-1">Ticker B</span>
+            <input
+              value={tickerB}
+              onChange={(e) => setTickerB(e.target.value)}
+              placeholder="np. MSFT"
+              className="bg-black border border-term-line-strong px-2.5 py-1.5 text-sm text-term-text focus:outline-none focus:border-term-amber w-32"
+            />
+          </label>
+          <button
+            onClick={compute}
+            disabled={loading}
+            className="px-4 py-1.5 border border-term-amber text-term-amber text-xs font-bold uppercase tracking-wide hover:bg-term-amber/10 disabled:opacity-40 transition-colors"
+          >
+            {loading ? "Liczę..." : "Oblicz"}
+          </button>
+        </div>
+        {error && <p className="text-xs text-term-red font-mono mt-3">{error}</p>}
+      </Panel>
+
+      {result && (
+        <Panel title={result.symbol}>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
+            <div>
+              <span className="block text-term-faint uppercase tracking-wide">Korelacja</span>
+              <span className="text-term-text font-semibold tabular-nums">{result.correlation.toFixed(4)}</span>
+            </div>
+            <div>
+              <span className="block text-term-faint uppercase tracking-wide">Zmienność</span>
+              <span className="text-term-text font-semibold tabular-nums">{result.volatility.toFixed(4)}</span>
+            </div>
+            <div>
+              <span className="block text-term-faint uppercase tracking-wide">RSI (14)</span>
+              <span className="text-term-text font-semibold tabular-nums">{result.technicals.rsi.toFixed(2)}</span>
+            </div>
+            <div>
+              <span className="block text-term-faint uppercase tracking-wide">MACD</span>
+              <span className="text-term-text font-semibold tabular-nums">
+                {result.technicals.macd_line.toFixed(4)} (sygnał {result.technicals.macd_signal.toFixed(4)})
+              </span>
+            </div>
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}

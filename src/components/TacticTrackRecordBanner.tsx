@@ -19,13 +19,13 @@ export function TacticTrackRecordBanner() {
   }
 
   return (
-    <div className="bg-[#0a0a1a]/60 rounded-2xl border border-cyan-900/30 px-5 py-3 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs font-mono">
-      <span className="text-slate-500 uppercase tracking-wide">Skuteczność wygenerowanych taktyk:</span>
-      <span className="text-slate-300">
-        24h: <span className="text-cyan-300">{hitRatePct(record.verified_24h_hits, record.verified_24h_total)}</span>
+    <div className="border border-term-line bg-term-panel px-4 py-2.5 flex flex-wrap items-center gap-x-6 gap-y-1 text-xs font-mono">
+      <span className="text-term-faint uppercase tracking-wide">Skuteczność wygenerowanych taktyk:</span>
+      <span className="text-term-dim">
+        24h: <span className="text-term-amber">{hitRatePct(record.verified_24h_hits, record.verified_24h_total)}</span>
       </span>
-      <span className="text-slate-300">
-        7 dni: <span className="text-cyan-300">{hitRatePct(record.verified_7d_hits, record.verified_7d_total)}</span>
+      <span className="text-term-dim">
+        7 dni: <span className="text-term-amber">{hitRatePct(record.verified_7d_hits, record.verified_7d_total)}</span>
       </span>
     </div>
   );

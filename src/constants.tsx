@@ -1,4 +1,5 @@
 import { TrendingUp, BarChart3, Coins, Gem } from "lucide-react";
+import type { ViewId } from "./types";
 
 export const INSTRUMENT_ICONS: Record<string, React.ReactNode> = {
   NASDAQ: <TrendingUp size={18} />,
@@ -6,6 +7,21 @@ export const INSTRUMENT_ICONS: Record<string, React.ReactNode> = {
   GOLD: <Coins size={18} />,
   SILVER: <Gem size={18} />,
 };
+
+// kolejność = kolejność w ticker tape i w wynikach wyszukiwarki instrumentu
+export const INSTRUMENTS = ["NASDAQ", "SP500", "GOLD", "SILVER"];
+
+// view: null = zakładka jeszcze niezbudowana (wyszarzona, "wkrótce")
+export const VIEW_NAV_ITEMS: { label: string; fKey: string; view: ViewId | null }[] = [
+  { label: "Przegląd", fKey: "F1", view: "przeglad" },
+  { label: "Taktyka", fKey: "F2", view: "taktyka" },
+  { label: "Korelacje", fKey: "F3", view: "korelacje" },
+  { label: "Kalendarz", fKey: "F4", view: null },
+  { label: "Heatmapa", fKey: "F5", view: null },
+  { label: "Historia", fKey: "F6", view: null },
+  { label: "Alerty", fKey: "F7", view: null },
+  { label: "Ustawienia", fKey: "F8", view: "ustawienia" },
+];
 
 export const TACTIC_SCENARIO_STYLE: Record<string, string> = {
   bull: "text-green-400 border-green-900/50 bg-green-950/20",

@@ -25,13 +25,13 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
   };
 
   return (
-    <div className="h-screen w-screen bg-[#05050a] text-white flex items-center justify-center p-6">
-      <div className="max-w-md w-full bg-[#0a0a1a]/80 rounded-2xl border border-cyan-900/40 p-8 space-y-5">
+    <div className="h-screen w-screen bg-term-bg text-term-text flex items-center justify-center p-6 font-mono">
+      <div className="max-w-md w-full bg-term-panel border border-term-line-strong p-8 space-y-5">
         <div>
-          <h1 className="text-cyan-400 text-lg font-black tracking-[0.15em] uppercase mb-2">
+          <h1 className="text-term-amber text-lg font-black tracking-[0.15em] uppercase mb-2">
             Witaj w Trading Help
           </h1>
-          <p className="text-slate-400 text-sm font-mono leading-relaxed">
+          <p className="text-term-dim text-sm leading-relaxed">
             Aby generować analizy AI, potrzebny jest Twój własny klucz API Google Gemini.
             Klucz zostanie zapisany bezpiecznie w natywnym magazynie kluczy Twojego systemu
             i nigdy nie opuści Twojego komputera.
@@ -39,7 +39,7 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
         </div>
 
         <div className="space-y-2">
-          <label className="text-xs text-slate-500 uppercase tracking-wide font-bold">
+          <label className="text-xs text-term-faint uppercase tracking-wide font-bold">
             Klucz API Gemini
           </label>
           <input
@@ -47,25 +47,25 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="AIza..."
-            className="w-full bg-black/40 border border-cyan-900/50 rounded-lg px-3 py-2 text-sm font-mono text-slate-200 focus:outline-none focus:border-cyan-500"
+            className="w-full bg-black border border-term-line-strong px-3 py-2 text-sm text-term-text focus:outline-none focus:border-term-amber"
           />
         </div>
 
         {error && (
-          <p className="text-red-400 text-xs font-mono whitespace-pre-wrap">{error}</p>
+          <p className="text-term-red text-xs whitespace-pre-wrap">{error}</p>
         )}
 
         <button
           onClick={handleSave}
           disabled={saving}
-          className="w-full px-4 py-2.5 rounded bg-cyan-500/20 border border-cyan-500 text-cyan-300 text-xs font-bold uppercase tracking-wider hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+          className="w-full px-4 py-2.5 bg-term-amber/10 border border-term-amber text-term-amber text-xs font-bold uppercase tracking-wider hover:bg-term-amber/20 transition-colors disabled:opacity-50"
         >
           {saving ? "Zapisuję..." : "Zapisz i uruchom aplikację"}
         </button>
 
-        <p className="text-slate-600 text-[11px] font-mono">
+        <p className="text-term-faint text-[11px]">
           Nie masz jeszcze klucza? Wygeneruj go bezpłatnie na{" "}
-          <span className="text-cyan-500">aistudio.google.com/apikey</span>
+          <span className="text-term-cyan">aistudio.google.com/apikey</span>
         </p>
       </div>
     </div>

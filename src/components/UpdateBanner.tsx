@@ -17,8 +17,8 @@ export function UpdateBanner({
   if (status === "idle") return null;
 
   return (
-    <div className="bg-cyan-950/40 border border-cyan-700/50 rounded-2xl px-5 py-3 flex items-center justify-between flex-wrap gap-2">
-      <div className="flex items-center gap-2 text-cyan-300 text-xs font-mono">
+    <div className="bg-term-cyan/10 border border-term-cyan/40 px-4 py-2.5 flex items-center justify-between flex-wrap gap-2">
+      <div className="flex items-center gap-2 text-term-cyan text-xs font-mono">
         {status === "available" && (
           <>
             <Download size={14} />
@@ -38,7 +38,7 @@ export function UpdateBanner({
           </>
         )}
         {status === "error" && (
-          <span className="text-red-400">
+          <span className="text-term-red">
             Nie udało się zaktualizować{errorMsg ? `: ${errorMsg}` : ""}. Spróbuj ponownie później lub pobierz instalator ręcznie.
           </span>
         )}
@@ -46,7 +46,7 @@ export function UpdateBanner({
       {status === "available" && (
         <button
           onClick={onUpdate}
-          className="px-3 py-1.5 rounded bg-cyan-500/20 border border-cyan-500 text-cyan-300 text-xs font-bold uppercase hover:bg-cyan-500/30 transition-colors"
+          className="px-3 py-1.5 bg-term-cyan/10 border border-term-cyan text-term-cyan text-xs font-bold uppercase hover:bg-term-cyan/20 transition-colors"
         >
           Zaktualizuj teraz
         </button>

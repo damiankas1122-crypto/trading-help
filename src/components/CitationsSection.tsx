@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import type { Citation } from "../types";
 import { copyToClipboard } from "../utils/clipboard";
+import { Panel } from "./Panel";
 
 export function CitationsSection({ citations }: { citations: Citation[] }) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -16,15 +17,14 @@ export function CitationsSection({ citations }: { citations: Citation[] }) {
   };
 
   return (
-    <div className="space-y-2">
-      <h3 className="text-cyan-400 text-xs font-bold uppercase tracking-[0.15em]">Źródła</h3>
+    <Panel title="Cytowania">
       <ul className="space-y-2">
         {citations.map((c, i) => (
-          <li key={i} className="text-xs font-mono bg-black/30 rounded-lg p-3 space-y-1.5">
-            <p className="text-slate-400 italic">&ldquo;{c.claim}&rdquo;</p>
+          <li key={i} className="text-xs font-mono border border-term-line p-2.5 space-y-1.5">
+            <p className="text-term-dim italic">&ldquo;{c.claim}&rdquo;</p>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-300">
-                <span className="text-slate-600 uppercase mr-1">
+              <span className="text-term-text">
+                <span className="text-term-faint uppercase mr-1">
                   {c.evidence_type === "news" ? "News:" : "Dane:"}
                 </span>
                 {c.evidence_label}
@@ -32,7 +32,7 @@ export function CitationsSection({ citations }: { citations: Citation[] }) {
               {c.evidence_link && (
                 <button
                   onClick={() => copyLink(c.evidence_link as string, i)}
-                  className="flex items-center gap-1 text-slate-500 hover:text-cyan-300 shrink-0"
+                  className="flex items-center gap-1 text-term-faint hover:text-term-cyan shrink-0 transition-colors"
                 >
                   {copiedIndex === i ? <Check size={12} /> : <Copy size={12} />}
                   {copiedIndex === i ? "Skopiowano" : "Kopiuj link"}
@@ -42,6 +42,6 @@ export function CitationsSection({ citations }: { citations: Citation[] }) {
           </li>
         ))}
       </ul>
-    </div>
+    </Panel>
   );
 }

@@ -9,6 +9,8 @@ export type AnalyticalReport = {
   correlation: number;
   volatility: number;
   technicals: TechnicalIndicators;
+  latest_close: number;
+  daily_change_pct: number;
   timestamp: string;
 };
 
@@ -21,6 +23,10 @@ export type PreciousMetalsReport = {
   silver_volatility: number;
   gold_technicals: TechnicalIndicators;
   silver_technicals: TechnicalIndicators;
+  gold_price: number;
+  silver_price: number;
+  gold_daily_change_pct: number;
+  silver_daily_change_pct: number;
   timestamp: string;
 };
 
@@ -58,31 +64,22 @@ export type TacticTrackRecord = {
   verified_7d_hits: number;
 };
 
-export type BriefingProgress = {
-  instrument: string;
-  step: number;
-  total: number;
-};
-
-export type FullBriefing = {
-  slot: string;
-  compared_to: string | null;
+export type MarketContext = {
   equity_reports: AnalyticalReport[];
   metals_report: PreciousMetalsReport;
-  instrument_briefings: InstrumentBriefing[];
   pine_script_correlation: string;
   pine_script_correlation_explanation: string;
   pine_script_gsr: string;
   pine_script_gsr_explanation: string;
-  is_stale_data: boolean;
-  stale_data_message: string | null;
+  timestamp: string;
 };
 
 export type Snapshot = {
   equity_reports: AnalyticalReport[];
   metals_report: PreciousMetalsReport;
   timestamp: string;
-  slot: string;
 };
 
 export type UpdateStatus = "idle" | "available" | "downloading" | "ready" | "error";
+
+export type ViewId = "przeglad" | "taktyka" | "korelacje" | "ustawienia";
