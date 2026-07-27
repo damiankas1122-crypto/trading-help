@@ -1,7 +1,7 @@
 {
   "name": "trading_help",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "type": "module",
   "scripts": {
     "type-check": "tsc --noEmit",
@@ -21,14 +21,12 @@
     "postcss": "^8.5.16",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "tailwindcss": "^4.3.2",
-    "three": "^0.185.1"
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^4.6.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
