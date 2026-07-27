@@ -27,4 +27,7 @@ pub enum CommandError {
 
     #[error("Nieznany instrument: {0}")]
     UnknownInstrument(String),
+
+    #[error("Nieprawidłowy symbol tickera: {0}")]
+    InvalidTicker(String),
 }

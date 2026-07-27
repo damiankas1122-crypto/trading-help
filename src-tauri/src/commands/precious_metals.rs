@@ -7,7 +7,7 @@
 
 use crate::{models, market_engine, analysis_engine};
 use time::OffsetDateTime;
-use super::cross_market::{to_returns, align_and_correlate_lagged};
+use super::cross_market::{to_returns, align_and_correlate_lagged, daily_change_pct};
 use super::error::CommandError;
 
 /// close ze świecy najbliższej `target_unix` - od zwiększenia okna do 90 dni
@@ -58,6 +58,8 @@ pub(crate) async fn get_precious_metals_analysis_inner() -> Result<models::Preci
     };
 
     let timestamp = OffsetDateTime::now_utc().unix_timestamp().to_string();
+    let gold_price = gold_closes.last().copied().unwrap_or(0.0);
+    let silver_price = silver_closes.last().copied().unwrap_or(0.0);
 
     Ok(models::PreciousMetalsReport {
         correlation,
@@ -68,6 +70,10 @@ pub(crate) async fn get_precious_metals_analysis_inner() -> Result<models::Preci
         silver_volatility,
         gold_technicals,
         silver_technicals,
+        gold_price,
+        silver_price,
+        gold_daily_change_pct: daily_change_pct(&gold_closes),
+        silver_daily_change_pct: daily_change_pct(&silver_closes),
         timestamp,
     })
 }

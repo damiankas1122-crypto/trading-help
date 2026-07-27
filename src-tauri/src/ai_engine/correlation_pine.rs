@@ -121,6 +121,8 @@ mod find_strongest_pair_tests {
             correlation,
             volatility: 0.0,
             technicals: crate::models::TechnicalIndicators { rsi: 50.0, macd_line: 0.0, macd_signal: 0.0 },
+            latest_close: 0.0,
+            daily_change_pct: 0.0,
             timestamp: "2026-01-01".to_string(),
         }
     }

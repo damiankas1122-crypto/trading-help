@@ -26,6 +26,9 @@ pub struct AnalyticalReport {
     pub correlation: f64,
     pub volatility: f64,
     pub technicals: TechnicalIndicators,
+    /// cena ostatniej świecy leadera - pod ticker tape w UI
+    pub latest_close: f64,
+    pub daily_change_pct: f64,
     pub timestamp: String,
 }
 
@@ -39,6 +42,10 @@ pub struct PreciousMetalsReport {
     pub silver_volatility: f64,
     pub gold_technicals: TechnicalIndicators,
     pub silver_technicals: TechnicalIndicators,
+    pub gold_price: f64,
+    pub silver_price: f64,
+    pub gold_daily_change_pct: f64,
+    pub silver_daily_change_pct: f64,
     pub timestamp: String,
 }
 
@@ -75,30 +82,20 @@ pub struct Snapshot {
     pub equity_reports: Vec<AnalyticalReport>,
     pub metals_report: PreciousMetalsReport,
     pub timestamp: String,
-    pub slot: String,
 }
 
+/// dane liczbowe rynku (korelacje, GSR, szablonowe Pine Scripty) - bez AI,
+/// tanie wywołanie Yahoo Finance, odświeżane niezależnie od briefingu
+/// pojedynczego instrumentu
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct FullBriefing {
-    pub slot: String,
-    pub compared_to: Option<String>,
+pub struct MarketContext {
     pub equity_reports: Vec<AnalyticalReport>,
     pub metals_report: PreciousMetalsReport,
-    pub instrument_briefings: Vec<InstrumentBriefing>,
     pub pine_script_correlation: String,
     pub pine_script_correlation_explanation: String,
     pub pine_script_gsr: String,
     pub pine_script_gsr_explanation: String,
-    #[serde(default)]
-    pub is_stale_data: bool,
-    #[serde(default)]
-    pub stale_data_message: Option<String>,
-}
-#[derive(Serialize, Deserialize, Clone, Debug)]
-pub struct BriefingProgress {
-    pub instrument: String,
-    pub step: u32,
-    pub total: u32,
+    pub timestamp: String,
 }
 
 /// generowana na żądanie (osobny przycisk, nie briefing). pct-y to % względem

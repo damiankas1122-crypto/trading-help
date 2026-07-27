@@ -9,8 +9,10 @@ use tauri::AppHandle;
 mod error;
 mod cross_market;
 mod precious_metals;
+mod custom_pair;
 mod tactics;
-mod briefing;
+mod market_context;
+mod instrument_briefing;
 pub use error::CommandError;
 
 #[tauri::command]
@@ -33,8 +35,22 @@ pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsRepo
 }
 
 #[tauri::command]
-pub async fn get_full_briefing(app: AppHandle, slot: String) -> Result<models::FullBriefing, String> {
-    briefing::get_full_briefing_inner(app, slot)
+pub async fn get_custom_pair_correlation(ticker_a: String, ticker_b: String) -> Result<models::AnalyticalReport, String> {
+    custom_pair::get_custom_pair_correlation_inner(ticker_a, ticker_b)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_market_context(app: AppHandle) -> Result<models::MarketContext, String> {
+    market_context::get_market_context_inner(app)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_instrument_briefing(instrument: String) -> Result<models::InstrumentBriefing, String> {
+    instrument_briefing::get_instrument_briefing_inner(instrument)
         .await
         .map_err(|e| e.to_string())
 }

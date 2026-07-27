@@ -60,6 +60,18 @@ pub(crate) fn align_and_correlate_lagged(leader: &[f64], follower: &[f64], lag: 
 
 const DEFAULT_LAG: usize = 1;
 
+pub(crate) fn daily_change_pct(closes: &[f64]) -> f64 {
+    if closes.len() < 2 {
+        return 0.0;
+    }
+    let prev = closes[closes.len() - 2];
+    let last = closes[closes.len() - 1];
+    if prev == 0.0 {
+        return 0.0;
+    }
+    ((last - prev) / prev) * 100.0
+}
+
 /// jeden AnalyticalReport dla pary leader/follower - wydzielone, żeby dało
 /// się testować bez sieci
 fn build_pair_report(
@@ -77,12 +89,16 @@ fn build_pair_report(
     let volatility = analysis_engine::calculate_volatility(leader_data);
     // RSI/MACD też z leadera - follower to tylko punkt odniesienia
     let technicals = analysis_engine::calculate_technicals(leader_data);
+    let latest_close = leader_closes.last().copied().unwrap_or(0.0);
+    let daily_change = daily_change_pct(leader_closes);
 
     models::AnalyticalReport {
         symbol: format!("{}->{}", leader_label, follower_label),
         correlation,
         volatility,
         technicals,
+        latest_close,
+        daily_change_pct: daily_change,
         timestamp: timestamp.to_string(),
     }
 }
@@ -183,5 +199,44 @@ mod build_pair_report_tests {
 
         let report = build_pair_report("GOLD", &data, &closes, "SILVER", &closes, "2026-01-01");
         assert_eq!(report.symbol, "GOLD->SILVER");
+    }
+
+    #[test]
+    fn latest_close_is_leaders_last_candle() {
+        let leader_data = vec![candle(100.0), candle(110.0), candle(105.0)];
+        let leader_closes: Vec<f64> = leader_data.iter().map(|d| d.close).collect();
+        let follower_data = vec![candle(50.0), candle(51.0), candle(52.0)];
+        let follower_closes: Vec<f64> = follower_data.iter().map(|d| d.close).collect();
+
+        let report = build_pair_report(
+            "NASDAQ", &leader_data, &leader_closes, "SP500", &follower_closes, "2026-01-01",
+        );
+
+        assert_eq!(report.latest_close, 105.0);
+    }
+
+    #[test]
+    fn daily_change_pct_computed_from_leaders_last_two_candles() {
+        let leader_data = vec![candle(100.0), candle(110.0)];
+        let leader_closes: Vec<f64> = leader_data.iter().map(|d| d.close).collect();
+        let follower_data = vec![candle(50.0), candle(50.0)];
+        let follower_closes: Vec<f64> = follower_data.iter().map(|d| d.close).collect();
+
+        let report = build_pair_report(
+            "NASDAQ", &leader_data, &leader_closes, "SP500", &follower_closes, "2026-01-01",
+        );
+
+        assert!((report.daily_change_pct - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn daily_change_pct_is_zero_for_single_candle() {
+        assert_eq!(daily_change_pct(&[100.0]), 0.0);
+        assert_eq!(daily_change_pct(&[]), 0.0);
+    }
+
+    #[test]
+    fn daily_change_pct_ignores_zero_previous_close() {
+        assert_eq!(daily_change_pct(&[0.0, 100.0]), 0.0);
     }
 }
