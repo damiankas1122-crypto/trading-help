@@ -2,6 +2,47 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.4.0] - 2026-07-26
+
+### Added
+- Arbitrary-pair correlation builder ("Korelacje" view): compute correlation,
+  volatility, RSI and MACD for any two tickers on demand, not just the fixed
+  watchlist pairs
+- Live price and daily % change now included in analytical reports, powering
+  a live ticker tape across the top of the app
+
+### Changed
+- Full visual redesign to a dense, monospace "Terminal" theme (functional-only
+  color, zero border-radius) with tabbed views (Overview / Tactics /
+  Correlations / Settings) replacing the old single-page stack of cards
+- Instrument selection is now a proper search ("instrument in focus") instead
+  of a fixed 2x2 grid of all four instruments at once, decoupled from view
+  navigation
+- Replaced the three fixed daily briefing slots (morning/afternoon/evening,
+  each analyzing all 4 instruments) with on-demand, single-instrument
+  analysis — one Gemini call per click instead of four, significantly easier
+  on the free-tier rate limit (5/min, 20/day)
+- AI commentary for a single instrument now only sees that instrument's own
+  data (price, RSI, MACD, volatility). Correlation and Gold/Silver Ratio
+  remain visible as a passive "market context" panel, computed independently
+  and free of the AI rate limit, but no longer influence the generated text
+
+### Fixed
+- News grounding was broken: the general "All News" RSS feed is mostly
+  geopolitics and had stopped including article descriptions, so briefings
+  almost always reported "no relevant news" for every instrument. Switched to
+  topical feeds (Stock Market News, Metals Analysis)
+- Keyword matching used plain substring search, so "gold" matched inside
+  "Goldman Sachs" and could cause the AI to cite unrelated company news as
+  evidence about the price of gold. Matching is now word-boundary aware
+
+### Removed
+- The animated 3D background (three.js) — dropped in favor of the flatter,
+  denser Terminal aesthetic
+- The staleness guard that skipped AI regeneration when Yahoo Finance had no
+  new data — it was designed around the old shared 4-instrument snapshot and
+  has no natural equivalent for single, deliberate per-instrument requests
+
 ## [0.3.0] - 2026-07-25
 
 ### Added
