@@ -42,6 +42,7 @@ ROADMAP.md
 ROADMAP_ARCHIVE.md
 CODE_REVIEW_*.MD
 UWAGI_*
+archiwum/
 
 # === Signing keys (extra safety net, keys live outside the project anyway) ===
 *.key
