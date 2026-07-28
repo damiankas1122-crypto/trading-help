@@ -2,6 +2,47 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.4.1] - 2026-07-27
+
+Quality pass over the whole codebase after a full review of v0.4.0.
+
+### Added
+- "Skrypty" view collecting the market-wide TradingView indicators (index
+  correlation, Gold/Silver Ratio). They no longer take over the Overview,
+  which now shows only the script tied to the instrument you analyzed
+- Keyboard navigation in instrument search (arrows, Enter, Escape)
+- The link to generate a Gemini API key now opens in your browser instead of
+  being plain text you had to retype
+- Trading tactics now state the reference price their target/stop levels are
+  measured against
+
+### Fixed
+- App no longer shows a blank white screen if something goes wrong while
+  rendering — you get a readable message and a reload button
+- Prices, correlation and indicators could be silently wrong: futures
+  occasionally return candles with missing values, and a single one corrupted
+  every calculation for that instrument. Such candles are now discarded
+- "Odśwież dane rynkowe" looked dead: it gave no feedback and, if the refresh
+  failed while data was already on screen, the error was swallowed entirely.
+  It now shows progress, the last update time, and surfaces failures
+- Error messages no longer dump raw technical output. A rejected API key now
+  says so and points at Settings, instead of showing Google's JSON alongside a
+  misleading "model overloaded, try again"
+- Mistyping a ticker in the correlation builder (e.g. "NASDAQ" instead of
+  "^IXIC") now explains the expected format instead of reporting a parse error
+- Briefings no longer claim "no recent news" when the news source is simply
+  unreachable — the two cases are now told apart
+- Correlation is now labeled with what it is correlated against ("Korelacja z
+  SP500"), and the correlation builder states which ticker its indicators
+  describe
+- Removing the API key uses an in-app confirmation instead of a system dialog
+
+### Changed
+- Market data is cached for 5 minutes, so a single action no longer refetches
+  the same symbols several times. Generating a tactic went from roughly five
+  requests to two
+- The app now checks for updates every 4 hours, not only at startup
+
 ## [0.4.0] - 2026-07-26
 
 ### Added
