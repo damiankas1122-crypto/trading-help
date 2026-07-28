@@ -79,7 +79,8 @@ pub async fn generate_instrument_briefing(
     provider: &dyn AiProvider,
     instrument: &str,
     numeric_context: &str,
-    news: &[NewsItem],
+    // None = feed RSS niedostępny (inaczej niż pusta lista = brak trafień)
+    news: Option<&[NewsItem]>,
 ) -> Result<InstrumentBriefing, AiEngineError> {
     let news_lines = format_news_lines(news);
 
@@ -131,13 +132,18 @@ pub async fn generate_instrument_briefing(
     let json_text = strip_json_fence(&raw_response);
 
     let parsed: InstrumentBriefingResponse = serde_json::from_str(json_text).map_err(|e| {
+        // pełny szczegół (w tym surowa odpowiedź) tylko na stderr - user dostaje krótki
+        // komunikat, nie techniczny zrzut JSON-a (patrz CODE_REVIEW B-07)
+        eprintln!("Błąd parsowania briefingu dla {instrument}: {e}\nSurowa odpowiedź: {json_text}");
         AiEngineError::ResponseParseFailed(format!(
-            "nie udało się sparsować JSON-a z sentymentem dla {instrument}: {e} (surowa odpowiedź: {json_text})"
+            "nie udało się przetworzyć odpowiedzi AI dla {instrument} - spróbuj ponownie"
         ))
     })?;
 
     let variant = PineVariant::from_ai_choice(&parsed.pine_variant);
-    let citations = resolve_citations(parsed.citations, news);
+    // brak feedu = brak realnych tytułów do dopasowania, więc cytowania
+    // "news" i tak wypadną w resolve_citations - zostaną tylko numeryczne
+    let citations = resolve_citations(parsed.citations, news.unwrap_or(&[]));
 
     Ok(InstrumentBriefing {
         instrument: instrument.to_string(),

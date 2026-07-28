@@ -118,8 +118,13 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
                 .ok_or(AiEngineError::EmptyResponse);
         }
 
-        let is_retryable = status.as_u16() == 503 || status.as_u16() == 429;
+        let code = status.as_u16();
+        let is_retryable = code == 503 || code == 429;
         let text = res.text().await.unwrap_or_default();
+
+        // surowa odpowiedź Google tylko do logu - user dostaje komunikat
+        // dopasowany do statusu (patrz AiEngineError)
+        eprintln!("Gemini API {code} (próba {}): {text}", attempt + 1);
 
         // łapiemy RESOURCE_EXHAUSTED i retryDelay od Google zamiast pokazać surowy JSON
         let parsed_error: Option<GeminiErrorWrapper> = serde_json::from_str(&text).ok();
@@ -134,12 +139,17 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
             .and_then(|details| details.iter().find_map(|d| d.retry_delay.as_deref()))
             .and_then(|s| s.trim_end_matches('s').parse::<f64>().ok());
 
-        last_error = Some(if is_resource_exhausted {
+        last_error = Some(if is_resource_exhausted || code == 429 {
             AiEngineError::RateLimitExceeded
+        } else if status.is_client_error() {
+            // 4xx: retry nie pomoże, nie obiecuj że pomoże
+            AiEngineError::ApiClientError {
+                status: code,
+                message: super::client_error_message(code),
+            }
         } else {
-            AiEngineError::ApiError {
-                status: status.as_u16(),
-                body: text,
+            AiEngineError::ApiServerError {
+                status: code,
                 attempts: attempt + 1,
             }
         });
@@ -155,10 +165,10 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
         break;
     }
 
-    // RateLimitExceeded to osobny wariant, nie trzeba już odróżniać string-matchingiem
-    Err(last_error.unwrap_or(AiEngineError::ApiError {
+    // RateLimitExceeded to osobny wariant, nie trzeba już odróżniać string-matchingiem.
+    // unwrap_or defensywnie - pętla zawsze ustawia last_error przed break
+    Err(last_error.unwrap_or(AiEngineError::ApiServerError {
         status: 0,
-        body: "Nieznany błąd Gemini API".to_string(),
         attempts: MAX_RETRIES,
     }))
 }

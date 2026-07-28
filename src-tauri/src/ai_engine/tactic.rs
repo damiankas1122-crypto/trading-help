@@ -38,7 +38,8 @@ pub async fn generate_trading_tactic(
     provider: &dyn AiProvider,
     instrument: &str,
     numeric_context: &str,
-    news: &[NewsItem],
+    // None = feed RSS niedostępny (inaczej niż pusta lista = brak trafień)
+    news: Option<&[NewsItem]>,
     reference_price: f64,
 ) -> Result<TradingTactic, AiEngineError> {
     let news_lines = format_news_lines(news);
@@ -73,8 +74,11 @@ pub async fn generate_trading_tactic(
     let json_text = strip_json_fence(&raw_response);
 
     let parsed: TacticResponse = serde_json::from_str(json_text).map_err(|e| {
+        // pełny szczegół (w tym surowa odpowiedź) tylko na stderr - user dostaje krótki
+        // komunikat, nie techniczny zrzut JSON-a (patrz CODE_REVIEW B-07)
+        eprintln!("Błąd parsowania taktyki dla {instrument}: {e}\nSurowa odpowiedź: {json_text}");
         AiEngineError::ResponseParseFailed(format!(
-            "nie udało się sparsować JSON-a z taktyką dla {instrument}: {e} (surowa odpowiedź: {json_text})"
+            "nie udało się przetworzyć odpowiedzi AI dla {instrument} - spróbuj ponownie"
         ))
     })?;
 
