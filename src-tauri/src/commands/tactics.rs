@@ -10,37 +10,36 @@ use time::OffsetDateTime;
 use super::cross_market;
 use super::precious_metals;
 use super::error::CommandError;
-
-const VALID_TACTIC_INSTRUMENTS: [&str; 4] = ["NASDAQ", "SP500", "GOLD", "SILVER"];
-
-fn yahoo_symbol_for(instrument: &str) -> &'static str {
-    match instrument {
-        "NASDAQ" => "^IXIC",
-        "SP500" => "^GSPC",
-        "GOLD" => "GC=F",
-        "SILVER" => "SI=F",
-        _ => "^GSPC",
-    }
-}
+use super::instruments::{is_metal, is_supported, yahoo_symbol_for};
 
 /// taktyka na żądanie, osobny przycisk - poza sekwencją briefingu i jej
 /// rate-limitem. Zapisuje do tactic_store pod późniejszą weryfikację
 pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: String) -> Result<models::TradingTactic, CommandError> {
-    if !VALID_TACTIC_INSTRUMENTS.contains(&instrument.as_str()) {
+    if !is_supported(&instrument) {
         return Err(CommandError::UnknownInstrument(instrument));
     }
 
-    let equity_reports = cross_market::get_cross_market_analysis_inner().await?;
-    let metals_report = precious_metals::get_precious_metals_analysis_inner().await?;
-    let all_news = news_engine::fetch_all_news().await.unwrap_or_default();
-
-    let keywords = news_engine::keywords_for(&instrument);
-    let filtered_news = news_engine::filter_news_for_instrument(&all_news, keywords, 5);
-
-    let numeric_context = if instrument == "GOLD" || instrument == "SILVER" {
+    // tylko ta strona rynku, której faktycznie użyjemy w prompcie - wcześniej
+    // taktyka dla GOLD ściągała dodatkowo NASDAQ i SP500, których nie czytała
+    let numeric_context = if is_metal(&instrument) {
+        let metals_report = precious_metals::get_precious_metals_analysis_inner().await?;
         precious_metals::numeric_context_for_metal(&instrument, &metals_report)
     } else {
+        let equity_reports = cross_market::get_cross_market_analysis_inner().await?;
         cross_market::numeric_context_for_equity(&instrument, &equity_reports)
+    };
+
+    // awaria RSS to nie to samo co "brak newsów o tym instrumencie" - None
+    // niesie tę różnicę do promptu (patrz CODE_REVIEW B-08)
+    let filtered_news = match news_engine::fetch_all_news().await {
+        Ok(all_news) => {
+            let keywords = news_engine::keywords_for(&instrument);
+            Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
+        }
+        Err(e) => {
+            eprintln!("Nie udało się pobrać newsów dla {instrument}: {e}");
+            None
+        }
     };
 
     let price_history = market_engine::fetch_market_data(yahoo_symbol_for(&instrument))
@@ -53,7 +52,7 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
         ai_provider.as_ref(),
         &instrument,
         &numeric_context,
-        &filtered_news,
+        filtered_news.as_deref(),
         reference_price,
     )
     .await?;

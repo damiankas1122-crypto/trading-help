@@ -10,7 +10,7 @@ use crate::{models, market_engine, analysis_engine};
 use time::OffsetDateTime;
 use super::error::CommandError;
 
-pub(crate) fn calculate_correlation(data_a: Vec<f64>, data_b: Vec<f64>) -> f64 {
+pub(crate) fn calculate_correlation(data_a: &[f64], data_b: &[f64]) -> f64 {
     if data_a.is_empty() || data_b.is_empty() || data_a.len() != data_b.len() {
         return 0.0;
     }
@@ -53,9 +53,7 @@ pub(crate) fn align_and_correlate_lagged(leader: &[f64], follower: &[f64], lag: 
     }
     let leader_tail = &leader[leader.len() - len..];
     let follower_tail = &follower[follower.len() - len..];
-    let leader_slice = leader_tail[..len - lag].to_vec();
-    let follower_slice = follower_tail[lag..].to_vec();
-    calculate_correlation(leader_slice, follower_slice)
+    calculate_correlation(&leader_tail[..len - lag], &follower_tail[lag..])
 }
 
 const DEFAULT_LAG: usize = 1;

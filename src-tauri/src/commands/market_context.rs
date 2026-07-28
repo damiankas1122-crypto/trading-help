@@ -14,7 +14,7 @@ pub(crate) async fn get_market_context_inner(app: AppHandle) -> Result<models::M
     let equity_reports = cross_market::get_cross_market_analysis_inner().await?;
     let metals_report = precious_metals::get_precious_metals_analysis_inner().await?;
 
-    let strongest_equity = ai_engine::find_strongest_pair(&equity_reports)
+    let strongest_equity = ai_engine::find_strongest_equity_pair(&equity_reports)
         .ok_or(CommandError::NoStrongestPair)?;
 
     let pine_script_correlation = ai_engine::generate_correlation_pine_script(&strongest_equity.symbol);

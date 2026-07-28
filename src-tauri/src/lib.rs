@@ -16,8 +16,8 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-             commands::calculate_correlation,
              commands::get_cross_market_analysis,
              commands::get_precious_metals_analysis,
              commands::get_custom_pair_correlation,

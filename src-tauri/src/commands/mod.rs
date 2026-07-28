@@ -7,6 +7,7 @@ use crate::{models, history_store, keychain};
 use tauri::AppHandle;
 
 mod error;
+mod instruments;
 mod cross_market;
 mod precious_metals;
 mod custom_pair;
@@ -14,11 +15,6 @@ mod tactics;
 mod market_context;
 mod instrument_briefing;
 pub use error::CommandError;
-
-#[tauri::command]
-pub fn calculate_correlation(data_a: Vec<f64>, data_b: Vec<f64>) -> f64 {
-    cross_market::calculate_correlation(data_a, data_b)
-}
 
 #[tauri::command]
 pub async fn get_cross_market_analysis() -> Result<Vec<models::AnalyticalReport>, String> {

@@ -1,13 +1,18 @@
 //! Pine Script dla korelacji equity (NASDAQ<->SP500) i Gold/Silver Ratio -
-//! oba w 100% ręcznie napisane szablony, zero AI. `find_strongest_pair`
+//! oba w 100% ręcznie napisane szablony, zero AI. `find_strongest_equity_pair`
 //! wybiera, która para equity trafia do `generate_correlation_pine_script`
-//! (patrz commands/briefing.rs). Nie zależy od żadnego innego submodułu
+//! (patrz commands/market_context.rs). Nie zależy od żadnego innego submodułu
 //! ai_engine poza `label_to_tv_ticker` z `mod.rs`.
 
 use crate::models::AnalyticalReport;
 use super::label_to_tv_ticker;
 
-pub fn find_strongest_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
+/// Uwaga: "strongest" liczy się WYŁĄCZNIE z raportów equity przekazanych przez
+/// wołającego (dziś NASDAQ<->SP500) - metale mają własny, osobny skrypt GSR i
+/// nigdy nie trafiają do tego porównania.
+/// `None` tylko dla pustego wejścia - przy realnym `get_cross_market_analysis_inner`
+/// nie jest to osiągalne, bo ten zawsze zwraca 2 raporty albo błąd.
+pub fn find_strongest_equity_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
     reports.iter().max_by(|a, b| {
         a.correlation
             .abs()
@@ -112,7 +117,7 @@ pub fn explain_gsr_script() -> String {
 }
 
 #[cfg(test)]
-mod find_strongest_pair_tests {
+mod find_strongest_equity_pair_tests {
     use super::*;
 
     fn report(symbol: &str, correlation: f64) -> AnalyticalReport {
@@ -135,7 +140,7 @@ mod find_strongest_pair_tests {
             report("GOLD->SILVER", -0.4),
         ];
 
-        let strongest = find_strongest_pair(&reports).expect("powinien znaleźć raport");
+        let strongest = find_strongest_equity_pair(&reports).expect("powinien znaleźć raport");
         assert_eq!(strongest.symbol, "SP500->NASDAQ");
     }
 
@@ -146,7 +151,7 @@ mod find_strongest_pair_tests {
             report("GOLD->SILVER", -0.9),
         ];
 
-        let strongest = find_strongest_pair(&reports).expect("powinien znaleźć raport");
+        let strongest = find_strongest_equity_pair(&reports).expect("powinien znaleźć raport");
         assert_eq!(strongest.symbol, "GOLD->SILVER");
     }
 
@@ -157,13 +162,13 @@ mod find_strongest_pair_tests {
             report("SP500->NASDAQ", 0.5),
         ];
 
-        let result = find_strongest_pair(&reports);
+        let result = find_strongest_equity_pair(&reports);
         assert!(result.is_some());
     }
 
     #[test]
     fn returns_none_for_empty_reports() {
         let reports: Vec<AnalyticalReport> = vec![];
-        assert!(find_strongest_pair(&reports).is_none());
+        assert!(find_strongest_equity_pair(&reports).is_none());
     }
 }

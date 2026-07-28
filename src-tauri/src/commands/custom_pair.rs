@@ -47,6 +47,10 @@ pub(crate) async fn get_custom_pair_correlation_inner(
     let returns_b = to_returns(&closes_b);
     let correlation = align_and_correlate_lagged(&returns_a, &returns_b, 0);
 
+    // ŚWIADOMA asymetria: korelacja dotyczy pary, ale zmienność/RSI/MACD/cena
+    // liczą się wyłącznie z tickera A - `AnalyticalReport` ma miejsce tylko na
+    // jeden zestaw wskaźników. Ticker B wchodzi WYŁĄCZNIE do liczby korelacji.
+    // UI musi to nazwać wprost, żeby user nie wziął RSI za "RSI pary".
     let volatility = analysis_engine::calculate_volatility(&data_a);
     let technicals = analysis_engine::calculate_technicals(&data_a);
     let latest_close = closes_a.last().copied().unwrap_or(0.0);

@@ -6,18 +6,7 @@
 
 use crate::{models, market_engine, analysis_engine, ai_engine, news_engine};
 use super::error::CommandError;
-
-const VALID_INSTRUMENTS: [&str; 4] = ["NASDAQ", "SP500", "GOLD", "SILVER"];
-
-fn yahoo_symbol_for(instrument: &str) -> &'static str {
-    match instrument {
-        "NASDAQ" => "^IXIC",
-        "SP500" => "^GSPC",
-        "GOLD" => "GC=F",
-        "SILVER" => "SI=F",
-        _ => "^GSPC",
-    }
-}
+use super::instruments::{is_supported, yahoo_symbol_for};
 
 /// tylko dane WŁASNE instrumentu - żadnej korelacji z innym instrumentem,
 /// żeby AI nie wplatało w komentarz kontekstu spoza tego, co user faktycznie
@@ -33,7 +22,7 @@ fn numeric_context_for_instrument(instrument: &str, data: &[models::MarketData])
 }
 
 pub(crate) async fn get_instrument_briefing_inner(instrument: String) -> Result<models::InstrumentBriefing, CommandError> {
-    if !VALID_INSTRUMENTS.contains(&instrument.as_str()) {
+    if !is_supported(&instrument) {
         return Err(CommandError::UnknownInstrument(instrument));
     }
 
@@ -42,16 +31,25 @@ pub(crate) async fn get_instrument_briefing_inner(instrument: String) -> Result<
         .map_err(CommandError::MarketData)?;
     let numeric_context = numeric_context_for_instrument(&instrument, &data);
 
-    let all_news = news_engine::fetch_all_news().await.unwrap_or_default();
-    let keywords = news_engine::keywords_for(&instrument);
-    let filtered_news = news_engine::filter_news_for_instrument(&all_news, keywords, 5);
+    // awaria RSS to nie to samo co "brak newsów o tym instrumencie" - None
+    // niesie tę różnicę do promptu (patrz CODE_REVIEW B-08)
+    let filtered_news = match news_engine::fetch_all_news().await {
+        Ok(all_news) => {
+            let keywords = news_engine::keywords_for(&instrument);
+            Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
+        }
+        Err(e) => {
+            eprintln!("Nie udało się pobrać newsów dla {instrument}: {e}");
+            None
+        }
+    };
 
     let ai_provider: Box<dyn ai_engine::AiProvider> = Box::new(ai_engine::GeminiProvider);
     let briefing = ai_engine::generate_instrument_briefing(
         ai_provider.as_ref(),
         &instrument,
         &numeric_context,
-        &filtered_news,
+        filtered_news.as_deref(),
     )
     .await?;
 
