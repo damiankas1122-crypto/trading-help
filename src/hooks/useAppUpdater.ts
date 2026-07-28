@@ -19,7 +19,7 @@ export function useAppUpdater() {
     const runCheck = () => {
       checkForUpdate()
         .then((update) => {
-          // nie nadpisuj stanu gdy pobieranie/instalacja już trwa
+          // Do not overwrite state while a download or install is in progress.
           if (cancelled || !update?.available) return;
           setStatus((current) => {
             if (current === "downloading" || current === "ready") return current;
@@ -29,14 +29,14 @@ export function useAppUpdater() {
           });
         })
         .catch((err) => {
-          // cichy fail - brak sieci nie powinien blokować normalnego korzystania z apki
-          console.warn("Sprawdzanie aktualizacji nie powiodło się:", err);
+          // Fails quietly: no network must not block normal use of the app.
+          console.warn("Update check failed:", err);
         });
     };
 
     runCheck();
-    // apka bywa otwarta całymi dniami, a auto-update to główny kanał
-    // dostarczania zmian - samo sprawdzenie przy starcie by ich nie złapało
+    // The app can stay open for days and auto-update is the main delivery
+    // channel, so a startup-only check would miss releases.
     const interval = setInterval(runCheck, CHECK_INTERVAL_MS);
     return () => {
       cancelled = true;
@@ -64,7 +64,7 @@ export function useAppUpdater() {
       });
       await relaunch();
     } catch (err) {
-      console.error("Błąd instalacji aktualizacji:", err);
+      console.error("Update installation failed:", err);
       setErrorMsg(formatErrorMessage(err));
       setStatus("error");
     }

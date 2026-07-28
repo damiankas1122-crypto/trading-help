@@ -1,7 +1,7 @@
 import type { Snapshot } from "../types";
 import { Panel } from "./Panel";
 
-/** zamiast pustego ekranu pokazujemy ostatni zapisany odczyt, jeśli jest */
+/** Shows the last stored reading, if any, instead of an empty screen. */
 export function LastSnapshotPreview({ snapshot, onRefresh }: { snapshot: Snapshot; onRefresh: () => void }) {
   return (
     <Panel

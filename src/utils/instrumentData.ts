@@ -1,15 +1,16 @@
 import type { AnalyticalReport, PreciousMetalsReport, TechnicalIndicators } from "../types";
 
 /**
- * Metale i equity trzymają dane w dwóch różnych kształtach (`PreciousMetalsReport`
- * ma pola per-metal, equity to lista raportów par "A->B") - to rozgałęzienie
- * powielało się w TickerTape i OverviewView. Jedno miejsce, jeden kształt wyjścia.
+ * Metals and equities store data in two different shapes: `PreciousMetalsReport`
+ * has per-metal fields, while equities come as a list of "A->B" pair reports.
+ * That branch was duplicated in TickerTape and OverviewView; this is the single
+ * place for it, with one output shape.
  */
 export type InstrumentData = {
   price: number;
   changePct: number;
   correlation: number;
-  /** z czym liczona jest korelacja - inaczej "0.187" nie znaczy nic */
+  /** What the correlation is measured against; "0.187" alone means nothing. */
   correlatedWith: string | null;
   volatility: number;
   technicals: TechnicalIndicators;
@@ -39,7 +40,7 @@ export function instrumentDataFor(
 
   const report = equityReports?.find((r) => r.symbol.startsWith(`${instrument}->`));
   if (!report) return null;
-  // symbol ma postać "LEADER->FOLLOWER"
+  // The symbol has the form "LEADER->FOLLOWER".
   const follower = report.symbol.split("->")[1] ?? null;
   return {
     price: report.latest_close,

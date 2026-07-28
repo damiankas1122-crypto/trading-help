@@ -1,7 +1,7 @@
-//! Komendy Tauri eksponowane do frontendu (kontrakt IPC: Result<T, String>).
-//! Każda komenda to cienki wrapper: woła *_inner z odpowiedniego submodułu
-//! (Result<T, CommandError>) i stringifikuje błąd w jednym miejscu, na
-//! samym końcu - żadna logika biznesowa nie mieszka bezpośrednio tutaj.
+//! Tauri commands exposed to the frontend (IPC contract: Result<T, String>).
+//! Every command is a thin wrapper: it calls the matching `*_inner` submodule
+//! (Result<T, CommandError>) and stringifies the error in this one place. No
+//! business logic lives here.
 
 use crate::{models, history_store, keychain};
 use tauri::AppHandle;

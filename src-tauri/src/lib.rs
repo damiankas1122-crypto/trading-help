@@ -31,5 +31,5 @@ pub fn run() {
              commands::delete_gemini_api_key
         ])
         .run(tauri::generate_context!())
-        .expect("Błąd uruchamiania aplikacji");
+        .expect("failed to start application");
 }

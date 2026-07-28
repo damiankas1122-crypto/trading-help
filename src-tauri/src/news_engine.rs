@@ -2,14 +2,14 @@
 use crate::models::NewsItem;
 use std::time::Duration;
 
-// ogólny feed "All News" to głównie światowa polityka - prawie nigdy nie
-// łapie się na słowa kluczowe instrumentów. Tematyczne feedy trafiają dużo częściej.
+// The general "All News" feed is mostly world politics and almost never
+// matches instrument keywords. Topical feeds hit far more often.
 const NEWS_FEED_URLS: [&str; 2] = [
     "https://www.investing.com/rss/news_25.rss", // Stock Market News - NASDAQ/SP500
     "https://www.investing.com/rss/commodities_Metals.rss", // Metals Analysis - GOLD/SILVER
 ];
 
-/// pobiera i łączy tematyczne feedy; jeden padnięty feed nie wywala reszty
+/// Fetches and merges the topical feeds; one dead feed does not sink the rest.
 pub async fn fetch_all_news() -> Result<Vec<NewsItem>, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(30))
@@ -61,7 +61,7 @@ async fn fetch_feed(client: &reqwest::Client, url: &str) -> Result<Vec<NewsItem>
         .collect())
 }
 
-/// Filtruje newsy po słowach kluczowych (case-insensitive) pasujących do instrumentu.
+/// Filters news by instrument keywords, case-insensitively.
 pub fn filter_news_for_instrument(news: &[NewsItem], keywords: &[&str], limit: usize) -> Vec<NewsItem> {
     news.iter()
         .filter(|item| {
@@ -73,8 +73,8 @@ pub fn filter_news_for_instrument(news: &[NewsItem], keywords: &[&str], limit: u
         .collect()
 }
 
-// zwykłe .contains() łapało np. "gold" w środku "goldman sachs" - stąd
-// dopasowanie tylko na granicy słowa
+// A plain .contains() matched "gold" inside "goldman sachs", hence
+// word-boundary matching.
 fn contains_whole_word(haystack: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return false;
@@ -139,8 +139,8 @@ mod tests {
 
     #[test]
     fn fed_keyword_does_not_match_federal_as_substring() {
-        // "fed" i "federal reserve" to osobne, celowe wpisy - "fed" nie powinno
-        // łapać się w środku "federal" (to złapie osobny keyword "federal reserve")
+        // "fed" and "federal reserve" are separate deliberate keywords: "fed"
+        // must not match inside "federal", which the longer keyword covers.
         let news = vec![item("Federation of retailers reports steady sales")];
         let result = filter_news_for_instrument(&news, keywords_for("SP500"), 5);
         assert!(result.is_empty());

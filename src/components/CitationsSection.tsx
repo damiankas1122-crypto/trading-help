@@ -5,9 +5,8 @@ import { copyToClipboard } from "../utils/clipboard";
 import { Panel } from "./Panel";
 
 export function CitationsSection({ citations }: { citations: Citation[] }) {
-  // klucz to claim+label, nie indeks - lista przeładowuje się przy każdej
-  // nowej analizie, a indeks powiązałby stan "Skopiowano" z pozycją zamiast
-  // z konkretnym cytowaniem
+  // Keyed by claim+label rather than index: the list reloads on every analysis,
+  // and an index would tie the "copied" state to a position instead of a citation.
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (citations.length === 0) return null;

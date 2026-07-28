@@ -6,9 +6,9 @@ use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
 
-// świece dzienne i tak nie zmieniają się w ciągu sesji, a jedna akcja usera
-// (np. taktyka) potrafi dotknąć tego samego symbolu kilka razy - cache tnie
-// liczbę zapytań do najbardziej zawodnego elementu stacku
+// Daily candles do not change during a session, yet a single user action
+// (a tactic, say) can touch the same symbol several times. The cache cuts
+// requests to the least reliable part of the stack.
 const CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(300);
 
 type Cache = HashMap<String, (Instant, Vec<MarketData>)>;
@@ -18,8 +18,8 @@ fn cache() -> &'static Mutex<Cache> {
     CACHE.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-// blokada nigdy nie jest trzymana przez await - podnosimy ją tylko na czas
-// odczytu/zapisu mapy, sam fetch leci poza nią
+// The lock is never held across an await: it guards only map access, while
+// the fetch itself happens outside it.
 fn cached(symbol: &str) -> Option<Vec<MarketData>> {
     let guard = cache().lock().ok()?;
     let (fetched_at, data) = guard.get(symbol)?;
@@ -32,9 +32,10 @@ fn store_in_cache(symbol: &str, data: &[MarketData]) {
     }
 }
 
-// futures (GC=F, SI=F) czasem wracają ze świecą zawierającą NaN - jeden taki
-// close zatruwa korelację/zmienność/RSI/MACD dla całej serii, więc filtrujemy
-// tu, u źródła, zamiast łatać każdą funkcję liczącą osobno
+// Futures (GC=F, SI=F) occasionally return a candle containing NaN, and a
+// single such close corrupts correlation, volatility, RSI and MACD for the
+// whole series. Filtering here at the source spares every calculation from
+// defending against it separately.
 fn is_valid_candle(open: f64, high: f64, low: f64, close: f64) -> bool {
     open.is_finite() && high.is_finite() && low.is_finite() && close.is_finite()
 }
@@ -46,7 +47,7 @@ pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, String> 
 
     let provider = yf::YahooConnector::new().map_err(|e| e.to_string())?;
 
-    // 90 dni (~63 sesje) - MACD(12,26,9) potrzebuje min ~34 punktów na linię sygnału
+    // 90 days (~63 sessions): MACD(12,26,9) needs ~34 points for a signal line.
     let end = OffsetDateTime::now_utc();
     let start = end - Duration::days(90);
 

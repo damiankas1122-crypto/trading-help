@@ -20,7 +20,7 @@ const MACD_FAST: usize = 12;
 const MACD_SLOW: usize = 26;
 const MACD_SIGNAL: usize = 9;
 
-/// RSI Wildera(14). Za mało danych -> 50.0, to tylko domyślna wartość, nie sygnał
+/// Wilder's RSI(14). Falls back to 50.0 on insufficient data - a default, not a signal.
 pub fn calculate_rsi(closes: &[f64]) -> f64 {
     if closes.len() < RSI_PERIOD + 1 {
         return 50.0;
@@ -45,8 +45,8 @@ pub fn calculate_rsi(closes: &[f64]) -> f64 {
     100.0 - (100.0 / (1.0 + rs))
 }
 
-/// EMA seedowana SMA pierwszych `period` wartości, tak jak liczy TradingView.
-/// Ostatni element serii = EMA na najnowszym punkcie danych
+/// EMA seeded with the SMA of the first `period` values, matching TradingView.
+/// The last element is the EMA at the most recent data point.
 fn ema_series(values: &[f64], period: usize) -> Vec<f64> {
     if values.len() < period {
         return Vec::new();
@@ -62,8 +62,8 @@ fn ema_series(values: &[f64], period: usize) -> Vec<f64> {
     result
 }
 
-/// MACD(12,26,9). Za mało historii -> (0.0, 0.0) - to znaczy "nie policzono",
-/// nie neutralny sygnał
+/// MACD(12,26,9). Returns (0.0, 0.0) when history is too short - meaning
+/// "not computed", not a neutral signal.
 pub fn calculate_macd(closes: &[f64]) -> (f64, f64) {
     if closes.len() < MACD_SLOW + MACD_SIGNAL - 1 {
         return (0.0, 0.0);
@@ -110,17 +110,17 @@ mod tests {
 
     #[test]
     fn volatility_is_computed_from_percentage_returns_not_absolute_prices() {
-        // Regresja: kiedyś liczono zmienność z cen bezwzględnych, przez co
-        // drogi instrument (np. 20000 pkt) sztucznie wyglądał na bardziej
-        // zmienny niż tani (np. 100 pkt) przy identycznym % ruchu dziennym.
+        // Regression: volatility was once computed from absolute prices, which
+        // made an expensive instrument look more volatile than a cheap one at
+        // identical daily percentage moves.
         let cheap = vec![candle(100.0), candle(101.0), candle(99.0), candle(100.0)];
         let expensive = vec![candle(20000.0), candle(20200.0), candle(19800.0), candle(20000.0)];
 
         let vol_cheap = calculate_volatility(&cheap);
         let vol_expensive = calculate_volatility(&expensive);
 
-        // Identyczny % ruch dzień do dnia -> identyczna zmienność w %,
-        // niezależnie od poziomu ceny instrumentu.
+        // Identical daily percentage moves must yield identical volatility,
+        // regardless of price level.
         assert!((vol_cheap - vol_expensive).abs() < 1e-9);
     }
 
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn volatility_ignores_zero_price_to_avoid_division_by_zero() {
-        // Regresja: dzielenie przez zero gdy poprzednia świeca miała close=0.0
+        // Regression: division by zero when the previous candle had close=0.0.
         let data = vec![candle(0.0), candle(100.0), candle(101.0)];
         let result = calculate_volatility(&data);
         assert!(result.is_finite());
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn rsi_is_100_when_every_change_is_a_gain() {
-        // same wzrosty -> zero strat -> RSI = 100 (avg_loss == 0.0)
+        // Gains only means zero losses, so RSI saturates at 100 (avg_loss == 0.0).
         let closes: Vec<f64> = (0..16).map(|i| 100.0 + i as f64).collect();
         assert_eq!(calculate_rsi(&closes), 100.0);
     }
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn macd_line_is_positive_for_sustained_uptrend() {
-        // cały czas w górę -> EMA(12) > EMA(26) -> MACD > 0
+        // A sustained rise keeps EMA(12) above EMA(26), so MACD stays positive.
         let closes: Vec<f64> = (0..40).map(|i| 100.0 + i as f64).collect();
         let (macd_line, _signal) = calculate_macd(&closes);
         assert!(macd_line > 0.0);

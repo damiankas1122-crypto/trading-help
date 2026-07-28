@@ -1,8 +1,7 @@
-//! Główna analiza jednego instrumentu: komentarz AI, sentyment newsów,
-//! wybór wariantu Pine Script (`PineVariant`) i cytowania uzasadniające
-//! konkretne zdania. Jedno wywołanie Gemini na instrument - wszystkie te
-//! pola wracają w jednym ustrukturyzowanym JSON-ie (patrz komentarz w
-//! prompt), żeby nie mnożyć wywołań API ponad potrzebę (rate-limit Gemini).
+//! Per-instrument analysis: AI commentary, news sentiment, Pine Script variant
+//! (`PineVariant`) and citations backing specific sentences. One Gemini call per
+//! instrument returns all of it as a single structured JSON, keeping API usage
+//! within the rate limit.
 
 use crate::models::{Citation, InstrumentBriefing, NewsItem};
 use super::{format_news_lines, label_to_tv_ticker, strip_json_fence, AiEngineError, AiProvider};
@@ -24,11 +23,11 @@ struct InstrumentBriefingResponse {
     citations: Vec<CitationResponse>,
 }
 
-/// max cytowań - prompt prosi o tyle samo, to tylko zabezpieczenie w kodzie
+/// Citation cap; the prompt asks for the same number, this only enforces it.
 const MAX_CITATIONS: usize = 5;
 
-/// link do newsa nigdy od AI - szukamy dokładnego tytułu w liście z promptu,
-/// brak dopasowania = cytowanie leci do kosza
+/// News links never come from the model: the exact title is looked up in the
+/// prompt list, and an unmatched citation is dropped.
 fn resolve_citations(raw: Vec<CitationResponse>, news: &[NewsItem]) -> Vec<Citation> {
     raw.into_iter()
         .filter_map(|c| {
@@ -54,8 +53,8 @@ fn resolve_citations(raw: Vec<CitationResponse>, news: &[NewsItem]) -> Vec<Citat
         .collect()
 }
 
-/// AI wybiera tylko nazwę wariantu, nigdy nie pisze samego Pine Scripta -
-/// kod zawsze się kompiluje, bo leci z gotowego szablonu
+/// The model picks only a variant name, never writes Pine Script itself, so the
+/// emitted code always compiles - it comes from a fixed template.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PineVariant {
     Uptrend,
@@ -64,7 +63,7 @@ pub enum PineVariant {
 }
 
 impl PineVariant {
-    /// nieznana nazwa (literówka, halucynacja) ląduje bezpiecznie jako Consolidation
+    /// An unknown name (typo, hallucination) falls back safely to Consolidation.
     fn from_ai_choice(s: &str) -> Self {
         match s {
             "trend_wzrostowy" => PineVariant::Uptrend,
@@ -74,12 +73,12 @@ impl PineVariant {
     }
 }
 
-/// analiza jednego instrumentu + sentyment newsów, jedno wywołanie Gemini
+/// Analyses one instrument and scores news sentiment in a single Gemini call.
 pub async fn generate_instrument_briefing(
     provider: &dyn AiProvider,
     instrument: &str,
     numeric_context: &str,
-    // None = feed RSS niedostępny (inaczej niż pusta lista = brak trafień)
+    // None means the RSS feed is unavailable; an empty slice means no matches.
     news: Option<&[NewsItem]>,
 ) -> Result<InstrumentBriefing, AiEngineError> {
     let news_lines = format_news_lines(news);
@@ -132,17 +131,17 @@ pub async fn generate_instrument_briefing(
     let json_text = strip_json_fence(&raw_response);
 
     let parsed: InstrumentBriefingResponse = serde_json::from_str(json_text).map_err(|e| {
-        // pełny szczegół (w tym surowa odpowiedź) tylko na stderr - user dostaje krótki
-        // komunikat, nie techniczny zrzut JSON-a (patrz CODE_REVIEW B-07)
-        eprintln!("Błąd parsowania briefingu dla {instrument}: {e}\nSurowa odpowiedź: {json_text}");
+        // Full detail, including the raw response, goes to stderr only; the user
+        // gets a short message rather than a JSON dump.
+        eprintln!("Failed to parse briefing for {instrument}: {e}\nRaw response: {json_text}");
         AiEngineError::ResponseParseFailed(format!(
             "nie udało się przetworzyć odpowiedzi AI dla {instrument} - spróbuj ponownie"
         ))
     })?;
 
     let variant = PineVariant::from_ai_choice(&parsed.pine_variant);
-    // brak feedu = brak realnych tytułów do dopasowania, więc cytowania
-    // "news" i tak wypadną w resolve_citations - zostaną tylko numeryczne
+    // Without a feed there are no real titles to match, so "news" citations drop
+    // out in resolve_citations and only numeric ones remain.
     let citations = resolve_citations(parsed.citations, news.unwrap_or(&[]));
 
     Ok(InstrumentBriefing {
@@ -226,7 +225,7 @@ hline(30, "Wyprzedanie", color=color.green)
     )
 }
 
-/// renderuje szablon dla wariantu wybranego przez AI, samo nic nie generuje
+/// Renders the template for the variant chosen by the model; generates nothing.
 pub fn generate_signal_pine_script(instrument: &str, variant: PineVariant) -> String {
     match variant {
         PineVariant::Uptrend => pine_script_uptrend(instrument),
@@ -235,7 +234,7 @@ pub fn generate_signal_pine_script(instrument: &str, variant: PineVariant) -> St
     }
 }
 
-/// wyjaśnienie skryptu, na sztywno - nie generowane przez AI
+/// Fixed explanation of the script; not model-generated.
 pub fn explain_signal_pine_script(instrument: &str, variant: PineVariant) -> String {
     let base = format!(
         "Ten wskaźnik dla {instrument} pokazuje RSI(14) w osobnym panelu, z progami 70 \
@@ -275,7 +274,7 @@ mod pine_variant_tests {
 
     #[test]
     fn from_ai_choice_defaults_unknown_strings_to_consolidation() {
-        // to jest cała "walidacja" - halucynacja nie może wybrać nieistniejącego wariantu
+        // This is the whole "validation": a hallucination cannot select a variant that does not exist.
         assert_eq!(PineVariant::from_ai_choice("cokolwiek innego"), PineVariant::Consolidation);
         assert_eq!(PineVariant::from_ai_choice(""), PineVariant::Consolidation);
     }
@@ -336,7 +335,7 @@ mod citation_tests {
 
     #[test]
     fn news_citation_is_dropped_when_title_does_not_match_any_real_news() {
-        // cała ochrona przed zmyślonym linkiem - tytułu nie ma w promptcie, więc nie ufamy
+        // The entire defence against fabricated links: a title absent from the prompt is not trusted.
         let items = vec![news("Fed podnosi stopy", "https://example.com/fed")];
         let result = resolve_citations(vec![raw("coś", "news", "Zupełnie inny tytuł")], &items);
 

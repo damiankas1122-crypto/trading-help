@@ -1,7 +1,7 @@
-//! Surowy klient HTTP dla Gemini API: kształt requestu/response, retry z
-//! backoffem, rozpoznawanie RESOURCE_EXHAUSTED. `GeminiProvider` to jedyna
-//! dzisiejsza implementacja `AiProvider` (patrz `mod.rs`) - żaden inny
-//! submoduł nie powinien wołać `call_gemini` bezpośrednio, tylko przez trait.
+//! Raw HTTP client for the Gemini API: request/response shape, retry with
+//! backoff, RESOURCE_EXHAUSTED detection. `GeminiProvider` is currently the
+//! only `AiProvider` implementation (see `mod.rs`); no other submodule should
+//! call `call_gemini` directly rather than through the trait.
 
 use super::{AiEngineError, AiProvider};
 use serde::{Deserialize, Serialize};
@@ -122,11 +122,11 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
         let is_retryable = code == 503 || code == 429;
         let text = res.text().await.unwrap_or_default();
 
-        // surowa odpowiedź Google tylko do logu - user dostaje komunikat
-        // dopasowany do statusu (patrz AiEngineError)
-        eprintln!("Gemini API {code} (próba {}): {text}", attempt + 1);
+        // Google's raw response is log-only; the user gets a message matched
+        // to the status class (see AiEngineError).
+        eprintln!("Gemini API {code} (attempt {}): {text}", attempt + 1);
 
-        // łapiemy RESOURCE_EXHAUSTED i retryDelay od Google zamiast pokazać surowy JSON
+        // Prefer Google's RESOURCE_EXHAUSTED and retryDelay over raw JSON.
         let parsed_error: Option<GeminiErrorWrapper> = serde_json::from_str(&text).ok();
         let is_resource_exhausted = parsed_error
             .as_ref()
@@ -142,7 +142,7 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
         last_error = Some(if is_resource_exhausted || code == 429 {
             AiEngineError::RateLimitExceeded
         } else if status.is_client_error() {
-            // 4xx: retry nie pomoże, nie obiecuj że pomoże
+            // 4xx: retrying cannot help, so do not imply it will.
             AiEngineError::ApiClientError {
                 status: code,
                 message: super::client_error_message(code),
@@ -165,8 +165,8 @@ async fn call_gemini(prompt: String) -> Result<String, AiEngineError> {
         break;
     }
 
-    // RateLimitExceeded to osobny wariant, nie trzeba już odróżniać string-matchingiem.
-    // unwrap_or defensywnie - pętla zawsze ustawia last_error przed break
+    // RateLimitExceeded is its own variant, so no string matching is needed.
+    // The unwrap_or is defensive: the loop always sets last_error before break.
     Err(last_error.unwrap_or(AiEngineError::ApiServerError {
         status: 0,
         attempts: MAX_RETRIES,

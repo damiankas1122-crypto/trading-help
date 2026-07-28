@@ -3,10 +3,10 @@ import { PineScriptSection } from "./PineScriptSection";
 import { Panel } from "./Panel";
 
 /**
- * Skrypty przypięte do CAŁEGO rynku, nie do instrumentu w fokusie (korelacja
- * indeksów, GSR) - dlatego własna zakładka, a nie Przegląd: nie zmieniają się
- * gdy przełączysz instrument. Skrypt sygnału per-instrument zostaje w
- * Przeglądzie, bo jest kontekstowy do analizy tego instrumentu.
+ * Scripts tied to the market as a whole (index correlation, GSR) rather than to
+ * the focused instrument, hence their own tab: they do not change when the
+ * instrument changes. The per-instrument signal script stays in the overview,
+ * where it is contextual to that instrument's analysis.
  */
 export function ScriptsView({ marketContext }: { marketContext: MarketContext | null }) {
   if (!marketContext) {

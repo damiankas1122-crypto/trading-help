@@ -1,17 +1,15 @@
-//! Analiza metali szlachetnych: korelacja Au-Ag, Gold/Silver Ratio (obecny
-//! i sprzed 30 dni), zmienność i wskaźniki techniczne dla obu metali.
-//! Korzysta z matematyki korelacji zdefiniowanej w `cross_market.rs`
-//! (`to_returns`/`align_and_correlate_lagged`) - metale nie mają własnej
-//! wersji tych funkcji, żeby nie duplikować logiki. `numeric_context_for_metal`
-//! współdzielone z `briefing.rs`/`tactics.rs`. Zero #[tauri::command] tutaj.
+//! Precious metals analysis: Au-Ag correlation, Gold/Silver Ratio (current and
+//! 30 days back), volatility and technical indicators for both metals. Uses the
+//! correlation maths from `cross_market.rs` rather than keeping its own copy.
+//! No #[tauri::command] here.
 
 use crate::{models, market_engine, analysis_engine};
 use time::OffsetDateTime;
 use super::cross_market::{to_returns, align_and_correlate_lagged, daily_change_pct};
 use super::error::CommandError;
 
-/// close ze świecy najbliższej `target_unix` - od zwiększenia okna do 90 dni
-/// nie można już zakładać że pierwsza świeca to "30 dni temu"
+/// Close of the candle nearest `target_unix`. Since the window grew to 90 days,
+/// the first candle can no longer be assumed to be "30 days ago".
 fn close_nearest_to(data: &[models::MarketData], target_unix: i64) -> Option<f64> {
     data.iter()
         .min_by_key(|d| (d.timestamp - target_unix).abs())

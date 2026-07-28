@@ -1,10 +1,9 @@
-//! Korelacja equity (NASDAQ<->SP500): fetch danych, korelacja z laggiem,
-//! zmienność i wskaźniki techniczne per para leader/follower. Matematyka
-//! korelacji (`calculate_correlation`, `to_returns`, `align_and_correlate_lagged`)
-//! żyje tutaj, ale jest współdzielona z `precious_metals.rs` (korelacja
-//! Au-Ag) - stąd `pub(crate)`, nie prywatne. `numeric_context_for_equity`
-//! współdzielone z `briefing.rs`/`tactics.rs`. Zero #[tauri::command]
-//! tutaj - te żyją w commands/mod.rs.
+//! Equity correlation (NASDAQ<->SP500): data fetch, lagged correlation,
+//! volatility and technical indicators per leader/follower pair. The correlation
+//! maths (`calculate_correlation`, `to_returns`, `align_and_correlate_lagged`)
+//! lives here but is shared with `precious_metals.rs` and `custom_pair.rs`,
+//! hence `pub(crate)` rather than private. No #[tauri::command] here - those
+//! live in commands/mod.rs.
 
 use crate::{models, market_engine, analysis_engine};
 use time::OffsetDateTime;
@@ -70,8 +69,8 @@ pub(crate) fn daily_change_pct(closes: &[f64]) -> f64 {
     ((last - prev) / prev) * 100.0
 }
 
-/// jeden AnalyticalReport dla pary leader/follower - wydzielone, żeby dało
-/// się testować bez sieci
+/// One AnalyticalReport for a leader/follower pair; extracted so it can be
+/// tested without network access.
 fn build_pair_report(
     leader_label: &str,
     leader_data: &[models::MarketData],
@@ -83,9 +82,9 @@ fn build_pair_report(
     let leader_returns = to_returns(leader_closes);
     let follower_returns = to_returns(follower_closes);
     let correlation = align_and_correlate_lagged(&leader_returns, &follower_returns, DEFAULT_LAG);
-    // zmienność z leadera, nie followera - kiedyś to się pomyliło i był z tego bug
+    // Volatility comes from the leader, not the follower; mixing these caused a bug.
     let volatility = analysis_engine::calculate_volatility(leader_data);
-    // RSI/MACD też z leadera - follower to tylko punkt odniesienia
+    // RSI/MACD also from the leader; the follower is only a reference point.
     let technicals = analysis_engine::calculate_technicals(leader_data);
     let latest_close = leader_closes.last().copied().unwrap_or(0.0);
     let daily_change = daily_change_pct(leader_closes);

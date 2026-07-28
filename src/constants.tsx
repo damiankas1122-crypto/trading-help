@@ -8,10 +8,10 @@ export const INSTRUMENT_ICONS: Record<string, React.ReactNode> = {
   SILVER: <Gem size={18} />,
 };
 
-// kolejność = kolejność w ticker tape i w wynikach wyszukiwarki instrumentu
+// Order drives both the ticker tape and instrument search results.
 export const INSTRUMENTS = ["NASDAQ", "SP500", "GOLD", "SILVER"];
 
-// view: null = zakładka jeszcze niezbudowana (wyszarzona, "wkrótce")
+// view: null marks a tab that is not built yet (greyed out, "coming soon").
 export const VIEW_NAV_ITEMS: { label: string; fKey: string; view: ViewId | null }[] = [
   { label: "Przegląd", fKey: "F1", view: "przeglad" },
   { label: "Taktyka", fKey: "F2", view: "taktyka" },

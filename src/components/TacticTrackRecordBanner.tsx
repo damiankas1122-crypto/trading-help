@@ -3,8 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type { TacticTrackRecord } from "../types";
 import { hitRatePct } from "../utils/format";
 
-// nic nie pokazujemy dopóki żadna taktyka nie jest zweryfikowana - inaczej
-// sugerowalibyśmy fałszywe "0%"
+// Renders nothing until at least one tactic is verified; otherwise it would
+// imply a misleading "0%".
 export function TacticTrackRecordBanner() {
   const [record, setRecord] = useState<TacticTrackRecord | null>(null);
 

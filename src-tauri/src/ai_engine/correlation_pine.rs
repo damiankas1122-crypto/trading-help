@@ -1,17 +1,17 @@
-//! Pine Script dla korelacji equity (NASDAQ<->SP500) i Gold/Silver Ratio -
-//! oba w 100% ręcznie napisane szablony, zero AI. `find_strongest_equity_pair`
-//! wybiera, która para equity trafia do `generate_correlation_pine_script`
-//! (patrz commands/market_context.rs). Nie zależy od żadnego innego submodułu
-//! ai_engine poza `label_to_tv_ticker` z `mod.rs`.
+//! Pine Script for equity correlation (NASDAQ<->SP500) and the Gold/Silver
+//! Ratio - both hand-written templates, no AI. `find_strongest_equity_pair`
+//! decides which equity pair reaches `generate_correlation_pine_script` (see
+//! commands/market_context.rs). Depends on no other ai_engine submodule beyond
+//! `label_to_tv_ticker` from `mod.rs`.
 
 use crate::models::AnalyticalReport;
 use super::label_to_tv_ticker;
 
-/// Uwaga: "strongest" liczy się WYŁĄCZNIE z raportów equity przekazanych przez
-/// wołającego (dziś NASDAQ<->SP500) - metale mają własny, osobny skrypt GSR i
-/// nigdy nie trafiają do tego porównania.
-/// `None` tylko dla pustego wejścia - przy realnym `get_cross_market_analysis_inner`
-/// nie jest to osiągalne, bo ten zawsze zwraca 2 raporty albo błąd.
+/// "Strongest" is measured only across the equity reports passed in by the
+/// caller (today NASDAQ<->SP500); metals have their own GSR script and never
+/// enter this comparison. `None` occurs only for empty input, which
+/// `get_cross_market_analysis_inner` cannot produce - it returns two reports or
+/// an error.
 pub fn find_strongest_equity_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
     reports.iter().max_by(|a, b| {
         a.correlation
@@ -56,7 +56,7 @@ hline(-0.5, "-0.5", color=color.red)
     )
 }
 
-/// wyjaśnienie skryptu korelacji, na sztywno
+/// Fixed explanation of the correlation script.
 pub fn explain_correlation_script(equity_pair_symbol: &str) -> String {
     let parts: Vec<&str> = equity_pair_symbol.split("->").collect();
     let (leader_label, follower_label) = if parts.len() == 2 {
@@ -101,7 +101,7 @@ hline(lowBandInput, "GSR niski", color=color.green)
     .to_string()
 }
 
-/// wyjaśnienie skryptu GSR, na sztywno
+/// Fixed explanation of the GSR script.
 pub fn explain_gsr_script() -> String {
     "Ten wskaźnik pokazuje relację Gold/Silver Ratio (GSR) - ile uncji srebra kosztuje jedna \
      uncja złota - bezpośrednio z wbudowanego w TradingView indeksu GOLDSILVER, więc nie musi \
@@ -140,7 +140,7 @@ mod find_strongest_equity_pair_tests {
             report("GOLD->SILVER", -0.4),
         ];
 
-        let strongest = find_strongest_equity_pair(&reports).expect("powinien znaleźć raport");
+        let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
         assert_eq!(strongest.symbol, "SP500->NASDAQ");
     }
 
@@ -151,7 +151,7 @@ mod find_strongest_equity_pair_tests {
             report("GOLD->SILVER", -0.9),
         ];
 
-        let strongest = find_strongest_equity_pair(&reports).expect("powinien znaleźć raport");
+        let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
         assert_eq!(strongest.symbol, "GOLD->SILVER");
     }
 

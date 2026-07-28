@@ -9,8 +9,7 @@ fn entry() -> Result<Entry, String> {
         .map_err(|e| format!("Nie udało się otworzyć magazynu kluczy systemu: {}", e))
 }
 
-/// Zapisuje klucz API Gemini w natywnym magazynie kluczy systemu
-/// (Windows Credential Manager na Windows).
+/// Stores the Gemini API key in the OS keychain (Windows Credential Manager).
 pub fn save_gemini_api_key(key: &str) -> Result<(), String> {
     if key.trim().is_empty() {
         return Err("Klucz API nie może być pusty.".to_string());
@@ -20,19 +19,19 @@ pub fn save_gemini_api_key(key: &str) -> Result<(), String> {
         .map_err(|e| format!("Nie udało się zapisać klucza API: {}", e))
 }
 
-/// Odczytuje zapisany klucz API Gemini. Zwraca błąd jeśli klucz nie istnieje.
+/// Reads the stored Gemini API key. Errors when no key is present.
 pub fn get_gemini_api_key() -> Result<String, String> {
     entry()?
         .get_password()
         .map_err(|e| format!("Nie udało się odczytać klucza API: {}", e))
 }
 
-/// Sprawdza czy klucz API jest już zapisany (do decyzji: pokazać onboarding czy nie).
+/// Whether a key is already stored; decides if onboarding is shown.
 pub fn has_gemini_api_key() -> bool {
     get_gemini_api_key().is_ok()
 }
 
-/// Usuwa zapisany klucz API (np. przycisk "zresetuj klucz" w ustawieniach).
+/// Removes the stored key, e.g. from the reset button in settings.
 pub fn delete_gemini_api_key() -> Result<(), String> {
     entry()?
         .delete_credential()

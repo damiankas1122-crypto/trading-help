@@ -1,6 +1,6 @@
-//! Wspierane instrumenty i ich symbole Yahoo Finance - jedno źródło prawdy
-//! dla warstwy komend (wcześniej ta sama lista i to samo mapowanie żyły
-//! osobno w `instrument_briefing.rs` i `tactics.rs`).
+//! Supported instruments and their Yahoo Finance symbols - the single source of
+//! truth for the command layer. The same list and mapping previously lived
+//! separately in `instrument_briefing.rs` and `tactics.rs`.
 
 pub(crate) const VALID_INSTRUMENTS: [&str; 4] = ["NASDAQ", "SP500", "GOLD", "SILVER"];
 
@@ -8,7 +8,7 @@ pub(crate) fn is_supported(instrument: &str) -> bool {
     VALID_INSTRUMENTS.contains(&instrument)
 }
 
-/// metale mają własną ścieżkę liczbową (GSR/korelacja Au-Ag) niż equity
+/// Metals take a different numeric path (GSR, Au-Ag correlation) than equities.
 pub(crate) fn is_metal(instrument: &str) -> bool {
     instrument == "GOLD" || instrument == "SILVER"
 }
@@ -29,8 +29,8 @@ mod tests {
 
     #[test]
     fn every_valid_instrument_has_a_dedicated_yahoo_symbol() {
-        // fallback "^GSPC" jest tylko dla nieznanych - żaden wspierany
-        // instrument nie może na niego wpaść przez pomyłkę
+        // The "^GSPC" fallback exists only for unknown labels; no supported
+        // instrument may reach it by accident.
         for instrument in VALID_INSTRUMENTS {
             let symbol = yahoo_symbol_for(instrument);
             if instrument != "SP500" {

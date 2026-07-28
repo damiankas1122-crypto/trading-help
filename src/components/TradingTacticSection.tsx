@@ -4,9 +4,9 @@ import type { TradingTactic } from "../types";
 import { TACTIC_SCENARIO_STYLE, TACTIC_SCENARIO_LABEL } from "../constants";
 import { signedPct, formatErrorMessage } from "../utils/format";
 
-// tactic jest kontrolowany (podniesiony do App.tsx per-instrument) - inaczej
-// przełączenie instrumentu w fokusie kasowałoby już wygenerowaną taktykę i
-// wymuszało zbędne kolejne wywołanie Gemini (limit 5/min, 20/dzień)
+// `tactic` is controlled (lifted into App.tsx per instrument); otherwise
+// switching focus would discard a generated tactic and force another Gemini
+// call against the 5/min, 20/day limit.
 export function TradingTacticSection({
   instrument,
   tactic,

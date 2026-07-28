@@ -1,8 +1,8 @@
-//! Integracja z Gemini: wybór dostawcy (`AiProvider`), typowane błędy
-//! (`AiEngineError`) i publiczne API modułu - reeksport z prywatnych
-//! submodułów niżej. Submoduły widzą się nawzajem tylko przez to, co ten
-//! plik jawnie reeksportuje albo przez `pub(crate)` helpery zdefiniowane
-//! tutaj (`label_to_tv_ticker`, `format_news_lines`, `strip_json_fence`).
+//! Gemini integration: provider selection (`AiProvider`), typed errors
+//! (`AiEngineError`) and the public module API re-exported from the private
+//! submodules below. Submodules see each other only through what this file
+//! re-exports explicitly or through the `pub(crate)` helpers defined here
+//! (`label_to_tv_ticker`, `format_news_lines`, `strip_json_fence`).
 
 use crate::models::NewsItem;
 use thiserror::Error;
@@ -20,7 +20,7 @@ pub use correlation_pine::{
 pub use tactic::generate_trading_tactic;
 pub use briefing::generate_instrument_briefing;
 
-/// błędy Gemini - zamiast Result<T, String> i zgadywania po tekście
+/// Typed Gemini errors, replacing `Result<T, String>` and text matching.
 #[derive(Error, Debug)]
 pub enum AiEngineError {
     #[error("Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).")]
@@ -41,18 +41,18 @@ pub enum AiEngineError {
     #[error("Przekroczono darmowy limit zapytań Gemini API (5 zapytań/minutę). Spróbuj ponownie za chwilę.")]
     RateLimitExceeded,
 
-    /// 4xx - problem po NASZEJ stronie (zły klucz, złe żądanie). Ponawianie nic
-    /// nie da, więc komunikat nie zachęca do "spróbuj ponownie". Surowe body
-    /// leci na stderr, nie do usera.
+    /// 4xx - the request itself is at fault (bad key, malformed body). Retrying
+    /// cannot help, so the message must not suggest it. The raw body goes to
+    /// stderr, never to the user.
     #[error("{message}")]
     ApiClientError { status: u16, message: String },
 
-    /// 5xx - problem po stronie Google. Tu ponawianie ma sens.
+    /// 5xx - a fault on Google's side, where retrying is meaningful.
     #[error("Gemini API jest chwilowo niedostępne (błąd {status}, nieudane próby: {attempts}). Spróbuj ponownie za chwilę.")]
     ApiServerError { status: u16, attempts: u32 },
 }
 
-/// komunikat dla 4xx - rzeczowy, bez sugerowania że retry pomoże
+/// Message for 4xx: factual, and never implies that retrying would help.
 pub(crate) fn client_error_message(status: u16) -> String {
     match status {
         401 | 403 => "Klucz API Gemini został odrzucony. Sprawdź, czy jest poprawny i aktywny \
@@ -70,15 +70,15 @@ pub(crate) fn client_error_message(status: u16) -> String {
     }
 }
 
-/// pod multi-provider (Etap 6) - nowy dostawca to nowa impl tego trait,
-/// zero zmian gdzie indziej
+/// Groundwork for multi-provider support: a new provider is a new impl of this
+/// trait and nothing else changes.
 #[async_trait::async_trait]
 pub trait AiProvider: Send + Sync {
     async fn generate(&self, prompt: String) -> Result<String, AiEngineError>;
 }
 
-/// mapowanie etykiety instrumentu na ticker TradingView - współdzielone
-/// między correlation_pine.rs (para equity/GSR) i briefing.rs (sygnał per instrument)
+/// Maps an instrument label to a TradingView ticker. Shared by
+/// correlation_pine.rs (equity/GSR pair) and briefing.rs (per-instrument signal).
 pub(crate) fn label_to_tv_ticker(label: &str) -> &'static str {
     match label {
         "NASDAQ" => "NASDAQ:IXIC",
@@ -89,7 +89,7 @@ pub(crate) fn label_to_tv_ticker(label: &str) -> &'static str {
     }
 }
 
-/// Gemini czasem i tak owija odpowiedź w ```json - zdejmujemy to przed parsowaniem
+/// Gemini sometimes wraps the response in a ```json fence; strip it before parsing.
 pub(crate) fn strip_json_fence(raw: &str) -> &str {
     let trimmed = raw.trim();
     trimmed
@@ -100,10 +100,10 @@ pub(crate) fn strip_json_fence(raw: &str) -> &str {
         .trim()
 }
 
-/// współdzielone między briefing.rs i tactic.rs - obie generują prompt z tą
-/// samą listą newsów. `None` = feed RSS niedostępny (co jest czymś innym niż
-/// "feed działa, ale nic nie pasuje do instrumentu") - bez tego rozróżnienia
-/// AI twierdziło "brak nowych wiadomości" także gdy RSS po prostu padł
+/// Shared by briefing.rs and tactic.rs, which build prompts from the same news
+/// list. `None` means the RSS feed is unavailable, which differs from "the feed
+/// works but nothing matches". Without that distinction the model claimed there
+/// was no news even when the feed had simply failed.
 pub(crate) fn format_news_lines(news: Option<&[NewsItem]>) -> String {
     match news {
         None => "(źródło newsów chwilowo niedostępne - NIE twierdź, że brak jest \
@@ -128,7 +128,7 @@ mod error_message_tests {
         for status in [401, 403] {
             let msg = client_error_message(status);
             assert!(msg.contains("Ustawieniach"), "status {status}: {msg}");
-            // regresja: 4xx nie może obiecywać, że ponowienie pomoże
+            // Regression: a 4xx message must not promise that retrying helps.
             assert!(!msg.contains("Spróbuj ponownie"), "status {status}: {msg}");
         }
     }
@@ -151,7 +151,7 @@ mod error_message_tests {
 
     #[test]
     fn client_error_message_is_the_whole_user_facing_text() {
-        // #[error("{message}")] - żaden surowy JSON od Google nie może się tu wkleić
+        // #[error("{message}")] guarantees no raw Google JSON can leak in here.
         let err = AiEngineError::ApiClientError {
             status: 403,
             message: client_error_message(403),
@@ -165,7 +165,7 @@ mod error_message_tests {
         let no_matches = format_news_lines(Some(&[]));
 
         assert_ne!(unavailable, no_matches);
-        // regresja B-08: przy padniętym feedzie AI nie może twierdzić "brak wiadomości"
+        // Regression: on a dead feed the model must not claim "no news".
         assert!(unavailable.contains("NIE twierdź"));
     }
 }

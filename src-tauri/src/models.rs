@@ -12,7 +12,7 @@ pub struct MarketData {
     pub close: f64,
 }
 
-/// RSI/MACD liczone z cen zamknięcia
+/// RSI/MACD computed from closing prices.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TechnicalIndicators {
     pub rsi: f64,
@@ -26,7 +26,7 @@ pub struct AnalyticalReport {
     pub correlation: f64,
     pub volatility: f64,
     pub technicals: TechnicalIndicators,
-    /// cena ostatniej świecy leadera - pod ticker tape w UI
+    /// Latest close of the leader; feeds the ticker tape.
     pub latest_close: f64,
     pub daily_change_pct: f64,
     pub timestamp: String,
@@ -84,9 +84,8 @@ pub struct Snapshot {
     pub timestamp: String,
 }
 
-/// dane liczbowe rynku (korelacje, GSR, szablonowe Pine Scripty) - bez AI,
-/// tanie wywołanie Yahoo Finance, odświeżane niezależnie od briefingu
-/// pojedynczego instrumentu
+/// Numeric market data: correlations, GSR, templated Pine Scripts. No AI and
+/// no rate limit, so it is refreshed independently of per-instrument briefings.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct MarketContext {
     pub equity_reports: Vec<AnalyticalReport>,
@@ -98,8 +97,8 @@ pub struct MarketContext {
     pub timestamp: String,
 }
 
-/// generowana na żądanie (osobny przycisk, nie briefing). pct-y to % względem
-/// ceny w momencie generacji, nie realna cena
+/// Generated on demand, separately from briefings. Percentages are relative
+/// to `reference_price`, not absolute price levels.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TradingTactic {
     pub instrument: String,
@@ -113,8 +112,8 @@ pub struct TradingTactic {
     pub timestamp: String,
 }
 
-/// wynik jednej weryfikacji (24h albo 7d). raz zapisany - nigdy nie
-/// nadpisujemy
+/// Outcome of one verification window (24h or 7d). Written once, never
+/// overwritten.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TacticVerification {
     /// "target_hit" | "stop_hit" | "neither"
@@ -122,8 +121,8 @@ pub struct TacticVerification {
     pub checked_at: i64,
 }
 
-/// taktyka do śledzenia trafności. reference_price - cena w momencie
-/// generacji
+/// Tactic tracked for accuracy. `reference_price` is the price at generation
+/// time.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TrackedTactic {
     pub id: String,
@@ -140,7 +139,7 @@ pub struct TrackedTactic {
     pub verified_7d: Option<TacticVerification>,
 }
 
-/// statystyka trafności 
+/// Aggregated accuracy statistics.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TacticTrackRecord {
     pub verified_24h_total: u32,

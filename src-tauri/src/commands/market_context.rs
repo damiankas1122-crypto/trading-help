@@ -1,7 +1,7 @@
-//! Dane liczbowe rynku (korelacje, GSR, szablonowe Pine Scripty) - bez AI,
-//! bez rate-limitu. Odświeżane niezależnie od briefingu pojedynczego
-//! instrumentu (patrz `instrument_briefing.rs`), zasila ticker tape i panel
-//! "Kontekst rynkowy". Zero #[tauri::command] tutaj.
+//! Numeric market data (correlations, GSR, templated Pine Scripts): no AI, no
+//! rate limit. Refreshed independently of per-instrument briefings (see
+//! `instrument_briefing.rs`); feeds the ticker tape and the market context
+//! panel. No #[tauri::command] here.
 
 use crate::{models, history_store, ai_engine};
 use tauri::AppHandle;

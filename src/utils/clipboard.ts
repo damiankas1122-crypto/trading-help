@@ -3,7 +3,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     await navigator.clipboard.writeText(text);
     return true;
   } catch {
-    // brak clipboard, np. uprawnienia
+    // Clipboard unavailable, e.g. due to permissions.
     return false;
   }
 }

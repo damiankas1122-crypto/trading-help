@@ -1,10 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { formatErrorMessage } from "../utils/format";
 
-// error boundary musi być klasą - React nie ma hookowego odpowiednika
-// (getDerivedStateFromError/componentDidCatch). Łapie tylko błędy renderu w
-// drzewie poniżej, nie błędy w handlerach zdarzeń (te już mają swój
-// try/catch per komponent - patrz CODE_REVIEW F-07)
+// Must be a class: React has no hook equivalent of getDerivedStateFromError or
+// componentDidCatch. Catches render errors in the tree below only, not errors in
+// event handlers, which have their own per-component try/catch.
 export class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state: { error: Error | null } = { error: null };
 
@@ -13,7 +12,7 @@ export class ErrorBoundary extends Component<{ children: ReactNode }, { error: E
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("Nieobsłużony błąd renderu:", error, info.componentStack);
+    console.error("Unhandled render error:", error, info.componentStack);
   }
 
   render() {

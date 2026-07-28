@@ -1,13 +1,12 @@
-//! Typ błędu wspólny dla całej warstwy komend Tauri. Każdy submoduł
-//! (cross_market, precious_metals, briefing, tactics) zwraca
-//! `Result<T, CommandError>`. Stringifikacja na `String` (kontrakt IPC z
-//! frontendem) dzieje się WYŁĄCZNIE w cienkich wrapperach `#[tauri::command]`
-//! w `mod.rs`, nigdy tutaj ani w submodułach logiki.
+//! Error type shared by the whole Tauri command layer. Every submodule returns
+//! `Result<T, CommandError>`. Conversion to `String` (the IPC contract with the
+//! frontend) happens only in the thin `#[tauri::command]` wrappers in `mod.rs`,
+//! never here or in the logic submodules.
 
 use thiserror::Error;
 
-/// błędy warstwy komend - #[tauri::command] i tak zwraca String do frontendu,
-/// stringify dzieje się w jednym miejscu na końcu
+/// Command-layer errors. Since `#[tauri::command]` returns `String` to the
+/// frontend anyway, stringification is centralised at the boundary.
 #[derive(Error, Debug)]
 pub enum CommandError {
     #[error("Błąd pobierania danych rynkowych: {0}")]

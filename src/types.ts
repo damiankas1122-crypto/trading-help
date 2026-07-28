@@ -53,7 +53,7 @@ export type TradingTactic = {
   entry_pct: number;
   target_pct: number;
   stop_loss_pct: number;
-  /** cena w momencie generacji - target/stop to % względem niej */
+  /** Price at generation time; target and stop are percentages of it. */
   reference_price: number;
   disclaimer: string;
   timestamp: string;

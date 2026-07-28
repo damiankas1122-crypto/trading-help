@@ -21,7 +21,7 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
       await invoke("save_gemini_api_key", { key: apiKey.trim() });
       onSaved();
     } catch (err) {
-      console.error("Błąd zapisu klucza API:", err);
+      console.error("Failed to save the API key:", err);
       setError(formatErrorMessage(err));
     } finally {
       setSaving(false);
@@ -71,9 +71,9 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
           Nie masz jeszcze klucza? Wygeneruj go bezpłatnie na{" "}
           <button
             onClick={() => {
-              // brak przeglądarki/uprawnienia nie może wywalić onboardingu
+              // A missing browser or permission must not break onboarding.
               openUrl(API_KEY_URL).catch((err) =>
-                console.warn("Nie udało się otworzyć przeglądarki:", err)
+                console.warn("Failed to open the browser:", err)
               );
             }}
             className="text-term-cyan underline underline-offset-2 hover:text-term-text transition-colors"

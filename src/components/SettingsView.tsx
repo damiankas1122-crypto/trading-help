@@ -4,8 +4,8 @@ import { Panel } from "./Panel";
 import { formatErrorMessage } from "../utils/format";
 
 export function SettingsView({ onKeyDeleted }: { onKeyDeleted: () => void }) {
-  // natywny confirm() wyglądał obco w terminalowym UI - własne potwierdzenie
-  // inline, w tej samej stylistyce
+  // A native confirm() looked foreign in the terminal UI; this is an inline
+  // confirmation in the same styling.
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -15,7 +15,7 @@ export function SettingsView({ onKeyDeleted }: { onKeyDeleted: () => void }) {
       await invoke("delete_gemini_api_key");
       onKeyDeleted();
     } catch (err) {
-      console.error("Błąd usuwania klucza:", err);
+      console.error("Failed to delete the key:", err);
       setError(formatErrorMessage(err));
       setConfirming(false);
     }

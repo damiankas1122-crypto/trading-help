@@ -26,8 +26,8 @@ function App() {
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [activeView, setActiveView] = useState<ViewId>("przeglad");
   const [focusedInstrument, setFocusedInstrument] = useState<string>(INSTRUMENTS[0]);
-  // per-instrument, żeby przełączenie fokusu nie kasowało wygenerowanej
-  // taktyki/briefingu i nie wymuszało zbędnego ponownego wywołania Gemini
+  // Keyed per instrument so switching focus does not discard an existing tactic
+  // or briefing, nor force a redundant Gemini call.
   const [tactics, setTactics] = useState<Record<string, TradingTactic | null>>({});
   const [instrumentBriefings, setInstrumentBriefings] = useState<Record<string, InstrumentBriefing | null>>({});
   const [briefingLoading, setBriefingLoading] = useState(false);
@@ -45,8 +45,8 @@ function App() {
       .catch(() => setHasApiKey(false));
   }, []);
 
-  // dane rynkowe (korelacje/GSR/ceny) - z Yahoo Finance, bez rate-limitu,
-  // więc odświeżane automatycznie, niezależnie od briefingu AI
+  // Market data comes from Yahoo Finance with no rate limit, so it refreshes
+  // automatically and independently of the AI briefing.
   const refreshMarketContext = async () => {
     setMarketContextRefreshing(true);
     try {
@@ -54,9 +54,9 @@ function App() {
       setMarketContext(result);
       setMarketContextError(null);
     } catch (err) {
-      console.error("Błąd pobierania danych rynkowych:", err);
-      // celowo NIE czyścimy marketContext - stare dane zostają widoczne,
-      // OverviewView pokazuje baner błędu obok nich (patrz U-01b)
+      console.error("Failed to fetch market data:", err);
+      // marketContext is deliberately kept: stale data stays visible and
+      // OverviewView renders an error banner alongside it.
       setMarketContextError(formatErrorMessage(err));
     } finally {
       setMarketContextRefreshing(false);
@@ -75,7 +75,7 @@ function App() {
       const result = await invoke<InstrumentBriefing>("get_instrument_briefing", { instrument });
       setInstrumentBriefings((prev) => ({ ...prev, [instrument]: result }));
     } catch (err) {
-      console.error("Błąd briefingu:", err);
+      console.error("Briefing failed:", err);
       setBriefingError(formatErrorMessage(err));
     } finally {
       setBriefingLoading(false);

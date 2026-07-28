@@ -40,7 +40,7 @@ pub fn evaluate_outcome(tactic: &TrackedTactic, price_history: &[MarketData], un
     Some("neither")
 }
 
-/// statystyka trafności - tylko z tactic'ów już zweryfikowanych
+/// Accuracy statistics, counting verified tactics only.
 pub fn compute_track_record(tactics: &[TrackedTactic]) -> TacticTrackRecord {
     let mut record = TacticTrackRecord {
         verified_24h_total: 0,
@@ -135,7 +135,8 @@ mod tests {
 
     #[test]
     fn same_day_double_touch_is_conservatively_counted_as_stop() {
-        // gdyby liczyło jako target_hit, dałoby się podkręcić % szerokim target+stop na jednej świecy
+        // Counting this as target_hit would let a wide target+stop on a single
+        // candle inflate the hit rate.
         let t = tactic("bull", 100.0, 2.0, -1.0);
         let history = vec![candle(2000, 105.0, 95.0)]; // dotyka i target=102, i stop=99
         assert_eq!(evaluate_outcome(&t, &history, 3000), Some("stop_hit"));

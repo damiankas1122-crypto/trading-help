@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { INSTRUMENTS, INSTRUMENT_ICONS } from "../constants";
 
-// dziś filtruje 4 stałe instrumenty, ale jako prawdziwy typeahead - gotowe
-// pod konfigurowalną watchlistę (Etap 6), nie przełącznik cykliczny
+// Currently filters four fixed instruments, but as a real typeahead rather than
+// a cycling switch, so a configurable watchlist can drop in unchanged.
 export function InstrumentSearch({ value, onSelect }: { value: string; onSelect: (instrument: string) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
@@ -17,7 +17,7 @@ export function InstrumentSearch({ value, onSelect }: { value: string; onSelect:
     setHighlighted(0);
   };
 
-  // pole stylizowane na terminal musi dać się obsłużyć bez myszy
+  // A terminal-styled field has to be operable without a mouse.
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open) return;
     if (e.key === "ArrowDown") {

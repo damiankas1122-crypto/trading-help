@@ -1,8 +1,7 @@
-//! Taktyka tradingowa na żądanie (osobny przycisk, poza sekwencją briefingu)
-//! + jej automatyczna, niezmienialna weryfikacja (24h/7d) i zagregowana
-//! statystyka trafności. Zależy od cross_market/precious_metals (numeric
-//! context), ai_engine (generacja) i tactic_store/tactic_engine
-//! (persystencja + ocena). Zero #[tauri::command] tutaj.
+//! On-demand trading tactic plus its automatic, immutable verification (24h/7d)
+//! and aggregated accuracy statistics. Depends on cross_market/precious_metals
+//! for numeric context, ai_engine for generation, and tactic_store/tactic_engine
+//! for persistence and scoring. No #[tauri::command] here.
 
 use crate::{models, market_engine, ai_engine, news_engine, tactic_engine, tactic_store};
 use tauri::AppHandle;
@@ -12,15 +11,15 @@ use super::precious_metals;
 use super::error::CommandError;
 use super::instruments::{is_metal, is_supported, yahoo_symbol_for};
 
-/// taktyka na żądanie, osobny przycisk - poza sekwencją briefingu i jej
-/// rate-limitem. Zapisuje do tactic_store pod późniejszą weryfikację
+/// On-demand tactic, separate from briefings. Persists to tactic_store for later
+/// verification.
 pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: String) -> Result<models::TradingTactic, CommandError> {
     if !is_supported(&instrument) {
         return Err(CommandError::UnknownInstrument(instrument));
     }
 
-    // tylko ta strona rynku, której faktycznie użyjemy w prompcie - wcześniej
-    // taktyka dla GOLD ściągała dodatkowo NASDAQ i SP500, których nie czytała
+    // Fetch only the side of the market the prompt actually uses; a GOLD tactic
+    // previously also pulled NASDAQ and SP500 and then ignored them.
     let numeric_context = if is_metal(&instrument) {
         let metals_report = precious_metals::get_precious_metals_analysis_inner().await?;
         precious_metals::numeric_context_for_metal(&instrument, &metals_report)
@@ -29,15 +28,15 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
         cross_market::numeric_context_for_equity(&instrument, &equity_reports)
     };
 
-    // awaria RSS to nie to samo co "brak newsów o tym instrumencie" - None
-    // niesie tę różnicę do promptu (patrz CODE_REVIEW B-08)
+    // An RSS failure differs from "no news for this instrument"; None carries
+    // that distinction into the prompt.
     let filtered_news = match news_engine::fetch_all_news().await {
         Ok(all_news) => {
             let keywords = news_engine::keywords_for(&instrument);
             Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
         }
         Err(e) => {
-            eprintln!("Nie udało się pobrać newsów dla {instrument}: {e}");
+            eprintln!("Failed to fetch news for {instrument}: {e}");
             None
         }
     };
@@ -70,20 +69,20 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
         verified_24h: None,
         verified_7d: None,
     };
-    // jak zapis do tactic_store się nie uda - user i tak dostaje taktykę,
-    // tylko nie wejdzie do statystyk
+    // A failed store write still returns the tactic; it just will not count
+    // towards the statistics.
     let _ = tactic_store::append(app, tracked);
 
     Ok(tactic)
 }
 
-/// weryfikuje taktyki po 24h/7d + liczy statystykę. "automatyczna" = przy
-/// każdym wywołaniu tej komendy, bo apka nie działa w tle 24/7
+/// Verifies tactics after 24h/7d and computes the statistics. "Automatic" means
+/// on every call of this command, since the app does not run in the background.
 pub(crate) async fn get_tactic_track_record_inner(app: &AppHandle) -> Result<models::TacticTrackRecord, CommandError> {
     let mut tactics = tactic_store::load_all(app);
     let now = OffsetDateTime::now_utc().unix_timestamp();
 
-    // cache cen na czas jednego wywołania - kilka taktyk tego samego instrumentu, jeden fetch
+    // Per-call price cache: several tactics on one instrument share a single fetch.
     let mut price_cache: std::collections::HashMap<&'static str, Vec<models::MarketData>> = std::collections::HashMap::new();
 
     for tactic in tactics.iter_mut() {

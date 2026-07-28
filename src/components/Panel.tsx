@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
-// wspólna otoczka "panelu terminala" (hairline border, nagłówek z paskiem) -
-// żeby nie powtarzać tego samego className w każdym widoku z osobna
+// Shared "terminal panel" shell (hairline border, header bar) so the same
+// className is not repeated across every view.
 export function Panel({
   title,
   badge,
