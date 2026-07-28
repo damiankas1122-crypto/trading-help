@@ -2,7 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { TradingTactic } from "../types";
 import { TACTIC_SCENARIO_STYLE, TACTIC_SCENARIO_LABEL } from "../constants";
-import { signedPct } from "../utils/format";
+import { signedPct, formatErrorMessage } from "../utils/format";
 
 // tactic jest kontrolowany (podniesiony do App.tsx per-instrument) - inaczej
 // przełączenie instrumentu w fokusie kasowałoby już wygenerowaną taktykę i
@@ -26,7 +26,7 @@ export function TradingTacticSection({
       const result = await invoke<TradingTactic>("generate_trading_tactic", { instrument });
       onTacticChange(result);
     } catch (err) {
-      setError(String(err));
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -64,6 +64,9 @@ export function TradingTacticSection({
             <div>Cel: <span className="opacity-90">{signedPct(tactic.target_pct)}</span></div>
             <div>Stop: <span className="opacity-90">{signedPct(tactic.stop_loss_pct)}</span></div>
           </div>
+          <p className="text-xs opacity-70 font-mono tabular-nums">
+            Poziomy liczone względem ceny {tactic.reference_price.toFixed(2)} z momentu generacji.
+          </p>
           <p className="text-xs opacity-80 font-mono border-t border-current/20 pt-2">{tactic.disclaimer}</p>
         </div>
       )}

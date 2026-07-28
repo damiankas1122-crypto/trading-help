@@ -53,6 +53,8 @@ export type TradingTactic = {
   entry_pct: number;
   target_pct: number;
   stop_loss_pct: number;
+  /** cena w momencie generacji - target/stop to % względem niej */
+  reference_price: number;
   disclaimer: string;
   timestamp: string;
 };
@@ -82,4 +84,4 @@ export type Snapshot = {
 
 export type UpdateStatus = "idle" | "available" | "downloading" | "ready" | "error";
 
-export type ViewId = "przeglad" | "taktyka" | "korelacje" | "ustawienia";
+export type ViewId = "przeglad" | "taktyka" | "korelacje" | "skrypty" | "ustawienia";

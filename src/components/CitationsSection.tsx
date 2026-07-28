@@ -5,22 +5,29 @@ import { copyToClipboard } from "../utils/clipboard";
 import { Panel } from "./Panel";
 
 export function CitationsSection({ citations }: { citations: Citation[] }) {
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  // klucz to claim+label, nie indeks - lista przeładowuje się przy każdej
+  // nowej analizie, a indeks powiązałby stan "Skopiowano" z pozycją zamiast
+  // z konkretnym cytowaniem
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   if (citations.length === 0) return null;
 
-  const copyLink = async (link: string, index: number) => {
+  const citationKey = (c: Citation) => `${c.claim}|${c.evidence_label}`;
+
+  const copyLink = async (link: string, key: string) => {
     if (await copyToClipboard(link)) {
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
+      setCopiedKey(key);
+      setTimeout(() => setCopiedKey(null), 2000);
     }
   };
 
   return (
     <Panel title="Cytowania">
       <ul className="space-y-2">
-        {citations.map((c, i) => (
-          <li key={i} className="text-xs font-mono border border-term-line p-2.5 space-y-1.5">
+        {citations.map((c) => {
+          const key = citationKey(c);
+          return (
+          <li key={key} className="text-xs font-mono border border-term-line p-2.5 space-y-1.5">
             <p className="text-term-dim italic">&ldquo;{c.claim}&rdquo;</p>
             <div className="flex items-center justify-between gap-2">
               <span className="text-term-text">
@@ -31,16 +38,17 @@ export function CitationsSection({ citations }: { citations: Citation[] }) {
               </span>
               {c.evidence_link && (
                 <button
-                  onClick={() => copyLink(c.evidence_link as string, i)}
+                  onClick={() => copyLink(c.evidence_link as string, key)}
                   className="flex items-center gap-1 text-term-faint hover:text-term-cyan shrink-0 transition-colors"
                 >
-                  {copiedIndex === i ? <Check size={12} /> : <Copy size={12} />}
-                  {copiedIndex === i ? "Skopiowano" : "Kopiuj link"}
+                  {copiedKey === key ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedKey === key ? "Skopiowano" : "Kopiuj link"}
                 </button>
               )}
             </div>
           </li>
-        ))}
+          );
+        })}
       </ul>
     </Panel>
   );

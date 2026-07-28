@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AnalyticalReport } from "../types";
 import { Panel } from "./Panel";
+import { formatErrorMessage } from "../utils/format";
 
 export function CorrelationBuilderView() {
   const [tickerA, setTickerA] = useState("");
@@ -25,7 +26,7 @@ export function CorrelationBuilderView() {
       });
       setResult(report);
     } catch (err) {
-      setError(String(err));
+      setError(formatErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -71,24 +72,28 @@ export function CorrelationBuilderView() {
         <Panel title={result.symbol}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">Korelacja</span>
+              <span className="block text-term-faint uppercase tracking-wide">Korelacja pary</span>
               <span className="text-term-text font-semibold tabular-nums">{result.correlation.toFixed(4)}</span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">Zmienność</span>
+              <span className="block text-term-faint uppercase tracking-wide">Zmienność {tickerA.trim()}</span>
               <span className="text-term-text font-semibold tabular-nums">{result.volatility.toFixed(4)}</span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">RSI (14)</span>
+              <span className="block text-term-faint uppercase tracking-wide">RSI (14) {tickerA.trim()}</span>
               <span className="text-term-text font-semibold tabular-nums">{result.technicals.rsi.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">MACD</span>
+              <span className="block text-term-faint uppercase tracking-wide">MACD {tickerA.trim()}</span>
               <span className="text-term-text font-semibold tabular-nums">
                 {result.technicals.macd_line.toFixed(4)} (sygnał {result.technicals.macd_signal.toFixed(4)})
               </span>
             </div>
           </div>
+          <p className="text-[11px] text-term-faint mt-3">
+            Korelacja dotyczy obu tickerów. Pozostałe wskaźniki liczone są wyłącznie dla{" "}
+            {tickerA.trim()} — drugi ticker wchodzi tylko do korelacji.
+          </p>
         </Panel>
       )}
     </div>

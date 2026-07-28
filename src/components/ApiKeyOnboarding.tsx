@@ -1,5 +1,9 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import { formatErrorMessage } from "../utils/format";
+
+const API_KEY_URL = "https://aistudio.google.com/apikey";
 
 export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
   const [apiKey, setApiKey] = useState("");
@@ -18,7 +22,7 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
       onSaved();
     } catch (err) {
       console.error("Błąd zapisu klucza API:", err);
-      setError(String(err));
+      setError(formatErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -65,7 +69,17 @@ export function ApiKeyOnboarding({ onSaved }: { onSaved: () => void }) {
 
         <p className="text-term-faint text-[11px]">
           Nie masz jeszcze klucza? Wygeneruj go bezpłatnie na{" "}
-          <span className="text-term-cyan">aistudio.google.com/apikey</span>
+          <button
+            onClick={() => {
+              // brak przeglądarki/uprawnienia nie może wywalić onboardingu
+              openUrl(API_KEY_URL).catch((err) =>
+                console.warn("Nie udało się otworzyć przeglądarki:", err)
+              );
+            }}
+            className="text-term-cyan underline underline-offset-2 hover:text-term-text transition-colors"
+          >
+            aistudio.google.com/apikey
+          </button>
         </p>
       </div>
     </div>

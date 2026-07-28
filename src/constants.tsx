@@ -16,9 +16,9 @@ export const VIEW_NAV_ITEMS: { label: string; fKey: string; view: ViewId | null 
   { label: "Przegląd", fKey: "F1", view: "przeglad" },
   { label: "Taktyka", fKey: "F2", view: "taktyka" },
   { label: "Korelacje", fKey: "F3", view: "korelacje" },
-  { label: "Kalendarz", fKey: "F4", view: null },
-  { label: "Heatmapa", fKey: "F5", view: null },
-  { label: "Historia", fKey: "F6", view: null },
+  { label: "Skrypty", fKey: "F4", view: "skrypty" },
+  { label: "Kalendarz", fKey: "F5", view: null },
+  { label: "Heatmapa", fKey: "F6", view: null },
   { label: "Alerty", fKey: "F7", view: null },
   { label: "Ustawienia", fKey: "F8", view: "ustawienia" },
 ];

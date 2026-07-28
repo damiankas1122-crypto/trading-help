@@ -4,30 +4,8 @@ import { CitationsSection } from "./CitationsSection";
 import { LastSnapshotPreview } from "./LastSnapshotPreview";
 import { EmptyStateFirstRun } from "./EmptyStateFirstRun";
 import { Panel } from "./Panel";
-import { signedPct } from "../utils/format";
-
-function numericDataFor(instrument: string, marketContext: MarketContext) {
-  if (instrument === "GOLD" || instrument === "SILVER") {
-    const m = marketContext.metals_report;
-    const isGold = instrument === "GOLD";
-    return {
-      price: isGold ? m.gold_price : m.silver_price,
-      changePct: isGold ? m.gold_daily_change_pct : m.silver_daily_change_pct,
-      correlation: m.correlation,
-      volatility: isGold ? m.gold_volatility : m.silver_volatility,
-      technicals: isGold ? m.gold_technicals : m.silver_technicals,
-    };
-  }
-  const report = marketContext.equity_reports.find((r) => r.symbol.startsWith(`${instrument}->`));
-  if (!report) return null;
-  return {
-    price: report.latest_close,
-    changePct: report.daily_change_pct,
-    correlation: report.correlation,
-    volatility: report.volatility,
-    technicals: report.technicals,
-  };
-}
+import { signedPct, formatUnixTimestamp } from "../utils/format";
+import { instrumentDataFor, isMetal } from "../utils/instrumentData";
 
 function Kv({ label, value, className = "" }: { label: string; value: string; className?: string }) {
   return (
@@ -42,6 +20,7 @@ export function OverviewView({
   instrument,
   marketContext,
   marketContextError,
+  marketContextRefreshing,
   lastSnapshot,
   onRefreshMarketContext,
   instrumentBriefing,
@@ -52,6 +31,7 @@ export function OverviewView({
   instrument: string;
   marketContext: MarketContext | null;
   marketContextError: string | null;
+  marketContextRefreshing: boolean;
   lastSnapshot: Snapshot | null;
   onRefreshMarketContext: () => void;
   instrumentBriefing: InstrumentBriefing | null;
@@ -59,20 +39,23 @@ export function OverviewView({
   briefingError: string | null;
   onAnalyze: () => void;
 }) {
-  const numeric = marketContext ? numericDataFor(instrument, marketContext) : null;
+  const numeric = marketContext
+    ? instrumentDataFor(instrument, marketContext.equity_reports, marketContext.metals_report)
+    : null;
 
-  if (!marketContext && !lastSnapshot) {
-    return marketContextError ? (
-      <div className="border border-term-red/50 bg-term-red/10 p-3 text-term-red text-xs font-mono whitespace-pre-wrap">
-        {marketContextError}
-      </div>
-    ) : (
-      <EmptyStateFirstRun />
-    );
+  if (!marketContext && !lastSnapshot && !marketContextError) {
+    return <EmptyStateFirstRun />;
   }
 
   return (
     <div className="space-y-3">
+      {marketContextError && (
+        <div className="border border-term-red/50 bg-term-red/10 p-3 text-term-red text-xs font-mono whitespace-pre-wrap">
+          Nie udało się odświeżyć danych rynkowych: {marketContextError}
+          {(marketContext || lastSnapshot) && " Pokazywane dane mogą być nieaktualne."}
+        </div>
+      )}
+
       {!marketContext && lastSnapshot && (
         <LastSnapshotPreview snapshot={lastSnapshot} onRefresh={onRefreshMarketContext} />
       )}
@@ -82,9 +65,10 @@ export function OverviewView({
         badge={
           <button
             onClick={onRefreshMarketContext}
-            className="text-[10px] normal-case tracking-normal text-term-faint hover:text-term-amber underline underline-offset-2"
+            disabled={marketContextRefreshing}
+            className="text-[10px] normal-case tracking-normal text-term-faint hover:text-term-amber underline underline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            Odśwież dane rynkowe
+            {marketContextRefreshing ? "Odświeżam..." : "Odśwież dane rynkowe"}
           </button>
         }
       >
@@ -98,6 +82,11 @@ export function OverviewView({
         >
           {briefingLoading ? `Analizuję ${instrument}...` : `Analizuj ${instrument}`}
         </button>
+        {marketContext && (
+          <p className="text-[11px] text-term-faint mt-2">
+            Dane rynkowe zaktualizowane: {formatUnixTimestamp(marketContext.timestamp)}
+          </p>
+        )}
       </Panel>
 
       {briefingError && (
@@ -124,9 +113,12 @@ export function OverviewView({
                   className={numeric.technicals.macd_line >= 0 ? "text-term-green" : "text-term-red"}
                 />
                 <Kv label="MACD sygnał" value={numeric.technicals.macd_signal.toFixed(2)} />
-                <Kv label="Korelacja" value={numeric.correlation.toFixed(3)} />
+                <Kv
+                  label={numeric.correlatedWith ? `Korelacja z ${numeric.correlatedWith}` : "Korelacja"}
+                  value={numeric.correlation.toFixed(3)}
+                />
                 <Kv label="Zmienność" value={numeric.volatility.toFixed(3)} />
-                {(instrument === "GOLD" || instrument === "SILVER") && (
+                {isMetal(instrument) && (
                   <Kv label="GSR" value={marketContext.metals_report.current_gsr.toFixed(2)} />
                 )}
               </>
@@ -162,37 +154,24 @@ export function OverviewView({
       )}
 
       {marketContext && (
-        <>
-          <Panel title="Kontekst rynkowy">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono text-term-dim">
-              {marketContext.equity_reports.map((r) => (
-                <div key={r.symbol}>
-                  <span className="text-term-faint">{r.symbol}: </span>
-                  <span>{r.correlation.toFixed(3)}</span>
-                </div>
-              ))}
-              <div>
-                <span className="text-term-faint">GSR: </span>
-                <span>{marketContext.metals_report.current_gsr.toFixed(2)}</span>
+        <Panel title="Kontekst rynkowy">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono text-term-dim">
+            {marketContext.equity_reports.map((r) => (
+              <div key={r.symbol}>
+                <span className="text-term-faint">{r.symbol}: </span>
+                <span>{r.correlation.toFixed(3)}</span>
               </div>
-              <div>
-                <span className="text-term-faint">Au-Ag corr: </span>
-                <span>{marketContext.metals_report.correlation.toFixed(3)}</span>
-              </div>
+            ))}
+            <div>
+              <span className="text-term-faint">GSR: </span>
+              <span>{marketContext.metals_report.current_gsr.toFixed(2)}</span>
             </div>
-          </Panel>
-
-          <PineScriptSection
-            title="Pine Script: Korelacja indeksów"
-            explanation={marketContext.pine_script_correlation_explanation}
-            code={marketContext.pine_script_correlation}
-          />
-          <PineScriptSection
-            title="Pine Script: Gold/Silver Ratio"
-            explanation={marketContext.pine_script_gsr_explanation}
-            code={marketContext.pine_script_gsr}
-          />
-        </>
+            <div>
+              <span className="text-term-faint">Au-Ag corr: </span>
+              <span>{marketContext.metals_report.correlation.toFixed(3)}</span>
+            </div>
+          </div>
+        </Panel>
       )}
     </div>
   );

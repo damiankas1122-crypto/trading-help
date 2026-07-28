@@ -4,12 +4,14 @@ import "./App.css";
 import type { MarketContext, Snapshot, ViewId, TradingTactic, InstrumentBriefing } from "./types";
 import { INSTRUMENTS } from "./constants";
 import { useAppUpdater } from "./hooks/useAppUpdater";
+import { formatErrorMessage } from "./utils/format";
 import { TickerTape } from "./components/TickerTape";
 import { ViewNav } from "./components/ViewNav";
 import { InstrumentSearch } from "./components/InstrumentSearch";
 import { OverviewView } from "./components/OverviewView";
 import { TacticsView } from "./components/TacticsView";
 import { CorrelationBuilderView } from "./components/CorrelationBuilderView";
+import { ScriptsView } from "./components/ScriptsView";
 import { SettingsView } from "./components/SettingsView";
 import { DisclaimerFooter } from "./components/DisclaimerFooter";
 import { ApiKeyOnboarding } from "./components/ApiKeyOnboarding";
@@ -19,6 +21,7 @@ function App() {
   const updater = useAppUpdater();
   const [marketContext, setMarketContext] = useState<MarketContext | null>(null);
   const [marketContextError, setMarketContextError] = useState<string | null>(null);
+  const [marketContextRefreshing, setMarketContextRefreshing] = useState(false);
   const [lastSnapshot, setLastSnapshot] = useState<Snapshot | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
   const [activeView, setActiveView] = useState<ViewId>("przeglad");
@@ -45,13 +48,18 @@ function App() {
   // dane rynkowe (korelacje/GSR/ceny) - z Yahoo Finance, bez rate-limitu,
   // więc odświeżane automatycznie, niezależnie od briefingu AI
   const refreshMarketContext = async () => {
+    setMarketContextRefreshing(true);
     try {
       const result = await invoke<MarketContext>("get_market_context");
       setMarketContext(result);
       setMarketContextError(null);
     } catch (err) {
       console.error("Błąd pobierania danych rynkowych:", err);
-      setMarketContextError(String(err));
+      // celowo NIE czyścimy marketContext - stare dane zostają widoczne,
+      // OverviewView pokazuje baner błędu obok nich (patrz U-01b)
+      setMarketContextError(formatErrorMessage(err));
+    } finally {
+      setMarketContextRefreshing(false);
     }
   };
 
@@ -68,7 +76,7 @@ function App() {
       setInstrumentBriefings((prev) => ({ ...prev, [instrument]: result }));
     } catch (err) {
       console.error("Błąd briefingu:", err);
-      setBriefingError(String(err));
+      setBriefingError(formatErrorMessage(err));
     } finally {
       setBriefingLoading(false);
     }
@@ -117,6 +125,7 @@ function App() {
               instrument={focusedInstrument}
               marketContext={marketContext}
               marketContextError={marketContextError}
+              marketContextRefreshing={marketContextRefreshing}
               lastSnapshot={lastSnapshot}
               onRefreshMarketContext={refreshMarketContext}
               instrumentBriefing={instrumentBriefings[focusedInstrument] ?? null}
@@ -135,6 +144,7 @@ function App() {
             />
           )}
           {activeView === "korelacje" && <CorrelationBuilderView />}
+          {activeView === "skrypty" && <ScriptsView marketContext={marketContext} />}
           {activeView === "ustawienia" && <SettingsView onKeyDeleted={() => setHasApiKey(false)} />}
         </main>
       </div>

@@ -1,21 +1,7 @@
 import type { AnalyticalReport, PreciousMetalsReport } from "../types";
 import { INSTRUMENTS } from "../constants";
 import { signedPct } from "../utils/format";
-
-function priceFor(
-  instrument: string,
-  equityReports: AnalyticalReport[] | null,
-  metalsReport: PreciousMetalsReport | null
-): { price: number; changePct: number } | null {
-  if (instrument === "GOLD" || instrument === "SILVER") {
-    if (!metalsReport) return null;
-    return instrument === "GOLD"
-      ? { price: metalsReport.gold_price, changePct: metalsReport.gold_daily_change_pct }
-      : { price: metalsReport.silver_price, changePct: metalsReport.silver_daily_change_pct };
-  }
-  const report = equityReports?.find((r) => r.symbol.startsWith(`${instrument}->`));
-  return report ? { price: report.latest_close, changePct: report.daily_change_pct } : null;
-}
+import { instrumentDataFor } from "../utils/instrumentData";
 
 export function TickerTape({
   equityReports,
@@ -27,7 +13,7 @@ export function TickerTape({
   return (
     <div className="bg-black border-b border-term-line px-4 py-1.5 flex flex-wrap gap-x-7 gap-y-1 font-mono text-xs tabular-nums">
       {INSTRUMENTS.map((instrument) => {
-        const data = priceFor(instrument, equityReports, metalsReport);
+        const data = instrumentDataFor(instrument, equityReports, metalsReport);
         return (
           <span key={instrument}>
             <span className="text-term-faint mr-2">{instrument}</span>
