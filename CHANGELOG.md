@@ -2,6 +2,14 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.4.2] - 2026-07-29
+
+### Fixed
+- Instrument analysis and trading tactics failed with a "service unavailable"
+  error on every attempt. The AI model the app was using had started refusing
+  every request on Google's side, so no amount of retrying could help. The app
+  now uses a newer model, and both features work again
+
 ## [0.4.1] - 2026-07-27
 
 Quality pass over the whole codebase after a full review of v0.4.0.

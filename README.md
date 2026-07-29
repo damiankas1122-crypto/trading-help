@@ -72,7 +72,7 @@ needed after the first install.
 | Backend     | Rust, Tauri 2                               |
 | Frontend    | React, TypeScript, Vite, Tailwind CSS        |
 | Market data | Yahoo Finance API                           |
-| AI          | Google Gemini API (`gemini-3.5-flash`)      |
+| AI          | Google Gemini API (`gemini-3.6-flash`)      |
 | News        | RSS feed parsing                            |
 | Credentials | OS-native credential store (via `keyring`)  |
 | Storage     | Local JSON snapshot (no external database)  |

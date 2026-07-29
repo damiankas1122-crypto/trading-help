@@ -7,7 +7,10 @@ use super::{AiEngineError, AiProvider};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
-const GEMINI_MODEL: &str = "gemini-3.5-flash";
+/// Switched from gemini-3.5-flash on 2026-07-29: that model answered 503
+/// UNAVAILABLE deterministically (19 of 19 attempts, identical body length)
+/// while this one returned 200 with the same key in the same minute.
+const GEMINI_MODEL: &str = "gemini-3.6-flash";
 
 #[derive(Serialize)]
 struct GeminiPart {
