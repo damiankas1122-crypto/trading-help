@@ -2,6 +2,46 @@
 
 All notable changes to Trading Help are documented here.
 
+## [0.4.3] - 2026-07-29
+
+### Added
+- You can now interrupt a running analysis or tactic generation. The button
+  appears only while the app is working, and stopping is treated as a normal
+  choice — no error message, the screen simply returns to its previous state
+- The app keeps a local log file and Settings has a button that opens the
+  folder holding it. Attach it when reporting a problem: it never contains
+  your API key, your prompts or the AI's answers, and nothing is sent anywhere
+- The accuracy statistics now say how many stored tactics were left out of the
+  calculation, instead of quietly showing a smaller number
+
+### Fixed
+- A failing AI request no longer burns three of your daily free-tier requests.
+  The app now stops retrying once a failure repeats identically, which is a
+  sign that trying again cannot help
+- Running out of the daily free-tier limit is now stated as such, with the
+  time it resets, instead of suggesting you try again in a moment — which was
+  simply untrue
+- A news headline containing accented or non-Latin characters could crash the
+  part of the app that matches headlines to instruments
+- Market data that arrives incomplete is now rejected instead of being shown.
+  Previously a partial download could surface as a price of 0 and neutral
+  indicators, indistinguishable from a genuinely calm market — and a tactic
+  generated from it counted toward the accuracy statistics
+- A tactic priced at zero can no longer be recorded, and any such entry
+  already saved is excluded from the statistics rather than counted as a win
+- Saved tactics are now written in a way that cannot leave the file truncated
+  if the app is closed mid-write, and two tactics generated in quick
+  succession can no longer overwrite each other
+- A dropped connection during an AI request is retried instead of failing
+  immediately, and a request that cannot finish in reasonable time now ends
+  with a clear message rather than waiting for minutes
+
+### Changed
+- Instruments are now described in one place in the backend, in preparation
+  for the wider instrument list planned for the next release. Nothing changes
+  on screen yet, but analyses and tactics can no longer silently fall back to
+  the wrong instrument's data
+
 ## [0.4.2] - 2026-07-29
 
 ### Fixed
