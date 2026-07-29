@@ -130,9 +130,11 @@ pub fn cancel(operation_id: &str) -> bool {
     }
 }
 
+/// Checks one specific id rather than the registry size: tests run in parallel,
+/// so any assertion on the total count races with whatever else is registered.
 #[cfg(test)]
-pub(crate) fn active_operations() -> usize {
-    registry().lock().map(|g| g.len()).unwrap_or(0)
+pub(crate) fn is_registered(operation_id: &str) -> bool {
+    registry().lock().map(|g| g.contains_key(operation_id)).unwrap_or(false)
 }
 
 #[cfg(test)]
@@ -149,29 +151,29 @@ mod tests {
 
     #[test]
     fn malformed_ids_are_never_stored() {
-        let before = active_operations();
-        let (_token, guard) = register("short");
-        assert_eq!(active_operations(), before, "zbyt krótkie id nie może wejść do rejestru");
+        let too_short = "short";
+        let (_token, guard) = register(too_short);
+        assert!(!is_registered(too_short), "zbyt krótkie id nie może wejść do rejestru");
         drop(guard);
 
-        let (_token, guard) = register(&"x".repeat(MAX_ID_LEN + 1));
-        assert_eq!(active_operations(), before, "zbyt długie id nie może wejść do rejestru");
+        let too_long = "x".repeat(MAX_ID_LEN + 1);
+        let (_token, guard) = register(&too_long);
+        assert!(!is_registered(&too_long), "zbyt długie id nie może wejść do rejestru");
         drop(guard);
     }
 
     #[test]
     fn guard_releases_the_entry_even_on_an_error_path() {
         let id = "guarded-error-path-1234";
-        let before = active_operations();
 
         let result: Result<(), &str> = (|| {
             let (_token, _guard) = register(id);
-            assert_eq!(active_operations(), before + 1);
+            assert!(is_registered(id));
             Err("coś poszło nie tak")
         })();
 
         assert!(result.is_err());
-        assert_eq!(active_operations(), before, "wpis został w rejestrze po błędzie");
+        assert!(!is_registered(id), "wpis został w rejestrze po błędzie");
         assert!(!cancel(id));
     }
 

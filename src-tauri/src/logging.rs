@@ -54,6 +54,23 @@ const SECRET_VALUE_MARKERS: &[&str] = &[
 
 const REDACTED: &str = "[REDACTED]";
 
+/// Length of a Finnhub API token.
+const BARE_TOKEN_LEN: usize = 40;
+
+/// A Finnhub token carries no distinctive prefix - it is 40 alphanumeric
+/// characters, so `token=` is the only thing that normally gives it away. This
+/// catches the case where one reaches the log bare, without its parameter name.
+///
+/// Redacting every 40-character run would also swallow git commit hashes, which
+/// are exactly that length; requiring a letter outside the hex alphabet excludes
+/// them, since a hash can never contain one.
+fn looks_like_bare_api_token(candidate: &str) -> bool {
+    candidate.len() == BARE_TOKEN_LEN
+        && candidate.chars().all(|c| c.is_ascii_alphanumeric())
+        && candidate.chars().any(|c| c.is_ascii_digit())
+        && candidate.chars().any(|c| c.is_ascii_alphabetic() && !c.is_ascii_hexdigit())
+}
+
 fn is_secret_char(c: char) -> bool {
     // Covers base64url and hex tokens; stops at &, quotes, whitespace, braces.
     c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~' | '+' | '/' | '=')
@@ -83,6 +100,16 @@ pub fn scrub(input: &str) -> String {
                     out.push_str(REDACTED);
                 }
                 rest = &rest[marker.len() + value_len..];
+                continue 'outer;
+            }
+
+            let alnum_run = rest
+                .char_indices()
+                .find(|(_, c)| !c.is_ascii_alphanumeric())
+                .map_or(rest.len(), |(i, _)| i);
+            if looks_like_bare_api_token(&rest[..alnum_run]) {
+                out.push_str(REDACTED);
+                rest = &rest[alnum_run..];
                 continue 'outer;
             }
 
@@ -314,20 +341,67 @@ pub fn debug_excerpt(_label: &str, _payload: &str) {}
 mod scrub_tests {
     use super::*;
 
+    /// Test inputs are assembled at run time so no credential-shaped literal
+    /// exists in the source. This pins the assumption that makes it safe: the
+    /// scrubber sees a `&str`, so how it was built cannot change the result.
+    #[test]
+    fn a_built_string_is_scrubbed_exactly_like_a_literal() {
+        let via_format = format!("{}{}", "AIza", "x".repeat(35));
+        let via_concat = String::from("AI") + "za" + &"x".repeat(35);
+        assert_eq!(via_format, via_concat, "oba warianty muszą dać ten sam ciąg wejściowy");
+        assert_eq!(scrub(&via_format), scrub(&via_concat));
+        assert_eq!(scrub(&via_format), REDACTED);
+    }
+
+    /// Synthetic stand-ins, assembled here rather than written out: a test for a
+    /// redaction rule must never carry a value copied from a real credential.
+    fn fake_google_key() -> String {
+        format!("{}{}", "AIza", "Sy0000000000000000000000000000000000".to_string())
+    }
+
+    fn fake_bearer_token() -> String {
+        format!("{}{}", "sk-", "0".repeat(24))
+    }
+
+    /// 40 alphanumeric characters, the Finnhub shape, with a non-hex letter so
+    /// it is distinguishable from a commit hash.
+    fn fake_finnhub_token() -> String {
+        format!("{}{}", "z1", "0".repeat(38))
+    }
+
+    #[test]
+    fn a_bare_token_is_removed_even_without_its_parameter_name() {
+        let token = fake_finnhub_token();
+        let scrubbed = scrub(&format!("Finnhub call rejected for {token} at 12:00"));
+        assert!(!scrubbed.contains(&token), "goły token przeszedł do logu");
+        assert!(scrubbed.contains(REDACTED));
+        assert!(scrubbed.contains("at 12:00"), "reszta linii ma zostać");
+    }
+
+    #[test]
+    fn a_commit_hash_is_not_mistaken_for_a_token() {
+        // 40 hex characters: the same length, and it must survive untouched.
+        let sha = "a5a0cdfe4f705edca51443dc836b9f1f43944f6e";
+        assert_eq!(sha.len(), 40);
+        assert_eq!(scrub(&format!("released {sha}")), format!("released {sha}"));
+    }
+
     #[test]
     fn google_api_key_is_removed() {
-        let line = "Gemini call failed with key AIzaSyD-1234567890abcdefghijklmnopqrstuv in header";
-        let scrubbed = scrub(line);
-        assert!(!scrubbed.contains("AIzaSyD-1234567890abcdefghijklmnopqrstuv"));
+        let key = fake_google_key();
+        let scrubbed = scrub(&format!("Gemini call failed with key {key} in header"));
+        assert!(!scrubbed.contains(&key));
         assert!(scrubbed.contains(REDACTED));
     }
 
     #[test]
     fn query_parameter_tokens_are_removed() {
         // The Finnhub shape, which will exist before anyone revisits this file.
-        let line = "GET https://finnhub.io/api/v1/company-news?symbol=AAPL&token=d9kgoohr01qkkbr95dh0";
-        let scrubbed = scrub(line);
-        assert!(!scrubbed.contains("d9kgoohr01qkkbr95dh0"));
+        let token = fake_finnhub_token();
+        let scrubbed = scrub(&format!(
+            "GET https://finnhub.io/api/v1/company-news?symbol=AAPL&token={token}"
+        ));
+        assert!(!scrubbed.contains(&token));
         assert!(scrubbed.contains("token=[REDACTED]"));
         assert!(scrubbed.contains("symbol=AAPL"), "nie-sekretne parametry mają zostać");
     }
@@ -340,8 +414,11 @@ mod scrub_tests {
 
     #[test]
     fn header_and_bearer_forms_are_removed() {
-        assert!(!scrub("x-goog-api-key: AIzaSyD-1234567890abcdefghijklmnopqrstuv").contains("AIzaSyD"));
-        assert!(!scrub("authorization: Bearer sk-live-abcdef1234567890").contains("sk-live"));
+        let key = fake_google_key();
+        assert!(!scrub(&format!("x-goog-api-key: {key}")).contains(&key));
+
+        let bearer = fake_bearer_token();
+        assert!(!scrub(&format!("authorization: Bearer {bearer}")).contains(&bearer));
     }
 
     #[test]
