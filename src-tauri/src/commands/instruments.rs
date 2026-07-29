@@ -1,26 +1,23 @@
-//! Supported instruments and their Yahoo Finance symbols - the single source of
-//! truth for the command layer. The same list and mapping previously lived
-//! separately in `instrument_briefing.rs` and `tactics.rs`.
+//! Thin lookup layer over the crate-level catalogue. Kept as a separate module
+//! because the command layer asks narrow questions ("is this supported?",
+//! "which Yahoo symbol?") and should not carry catalogue rows around.
 
-pub(crate) const VALID_INSTRUMENTS: [&str; 4] = ["NASDAQ", "SP500", "GOLD", "SILVER"];
+use crate::catalog::{self, InstrumentClass};
 
 pub(crate) fn is_supported(instrument: &str) -> bool {
-    VALID_INSTRUMENTS.contains(&instrument)
+    catalog::find(instrument).is_some()
 }
 
 /// Metals take a different numeric path (GSR, Au-Ag correlation) than equities.
 pub(crate) fn is_metal(instrument: &str) -> bool {
-    instrument == "GOLD" || instrument == "SILVER"
+    catalog::find(instrument).is_some_and(|entry| entry.class == InstrumentClass::Metal)
 }
 
-pub(crate) fn yahoo_symbol_for(instrument: &str) -> &'static str {
-    match instrument {
-        "NASDAQ" => "^IXIC",
-        "SP500" => "^GSPC",
-        "GOLD" => "GC=F",
-        "SILVER" => "SI=F",
-        _ => "^GSPC",
-    }
+/// `None` for unknown ids. Previously an unknown id resolved to "^GSPC", which
+/// let stored tactics be verified against S&P 500 prices instead of their own
+/// instrument; callers must now handle the miss explicitly.
+pub(crate) fn yahoo_symbol_for(instrument: &str) -> Option<&'static str> {
+    catalog::find(instrument).map(|entry| entry.yahoo_symbol)
 }
 
 #[cfg(test)]
@@ -28,15 +25,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_valid_instrument_has_a_dedicated_yahoo_symbol() {
-        // The "^GSPC" fallback exists only for unknown labels; no supported
-        // instrument may reach it by accident.
-        for instrument in VALID_INSTRUMENTS {
-            let symbol = yahoo_symbol_for(instrument);
-            if instrument != "SP500" {
-                assert_ne!(symbol, "^GSPC", "{instrument} wpada na fallback");
-            }
-        }
+    fn maps_the_original_four_instruments() {
+        assert_eq!(yahoo_symbol_for("NASDAQ"), Some("^IXIC"));
+        assert_eq!(yahoo_symbol_for("SP500"), Some("^GSPC"));
+        assert_eq!(yahoo_symbol_for("GOLD"), Some("GC=F"));
+        assert_eq!(yahoo_symbol_for("SILVER"), Some("SI=F"));
+    }
+
+    #[test]
+    fn unknown_instrument_has_no_symbol() {
+        assert_eq!(yahoo_symbol_for("BITCOIN"), None);
     }
 
     #[test]
@@ -45,6 +43,7 @@ mod tests {
         assert!(is_metal("SILVER"));
         assert!(!is_metal("NASDAQ"));
         assert!(!is_metal("SP500"));
+        assert!(!is_metal("GLD"), "ETF na złoto nie jest metalem w sensie GSR");
     }
 
     #[test]

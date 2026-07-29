@@ -146,4 +146,8 @@ pub struct TacticTrackRecord {
     pub verified_24h_hits: u32,
     pub verified_7d_total: u32,
     pub verified_7d_hits: u32,
+    /// Stored tactics excluded from the statistics because their reference price
+    /// cannot be scored. Reported separately so a smaller sample size is
+    /// explained rather than silently smaller.
+    pub skipped_invalid_reference_price: u32,
 }

@@ -9,8 +9,11 @@ use thiserror::Error;
 /// frontend anyway, stringification is centralised at the boundary.
 #[derive(Error, Debug)]
 pub enum CommandError {
-    #[error("Błąd pobierania danych rynkowych: {0}")]
-    MarketData(String),
+    /// Transparent: the market engine already distinguishes a source outage from
+    /// an instrument with too little history, and a wrapping prefix would blur
+    /// that back into one "data error".
+    #[error(transparent)]
+    MarketData(#[from] crate::market_engine::MarketDataError),
 
     #[error(transparent)]
     Ai(#[from] crate::ai_engine::AiEngineError),
@@ -29,4 +32,9 @@ pub enum CommandError {
 
     #[error("Nieprawidłowy symbol tickera: {0}")]
     InvalidTicker(String),
+
+    /// A tactic priced at zero would score every target as hit, so it must never
+    /// reach the store that feeds the track record.
+    #[error("Nieprawidłowa cena odniesienia dla {instrument}: {price}. Taktyka nie została zapisana.")]
+    InvalidReferencePrice { instrument: String, price: f64 },
 }

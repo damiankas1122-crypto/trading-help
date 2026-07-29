@@ -81,6 +81,11 @@ pub async fn generate_instrument_briefing(
     // None means the RSS feed is unavailable; an empty slice means no matches.
     news: Option<&[NewsItem]>,
 ) -> Result<InstrumentBriefing, AiEngineError> {
+    // Resolved before the Gemini call: an instrument with no TradingView ticker
+    // could not get a Pine Script anyway, and Gemini quota is the scarce resource.
+    let ticker = label_to_tv_ticker(instrument)
+        .ok_or_else(|| AiEngineError::UnknownInstrument(instrument.to_string()))?;
+
     let news_lines = format_news_lines(news);
 
     let prompt = format!(
@@ -131,9 +136,14 @@ pub async fn generate_instrument_briefing(
     let json_text = strip_json_fence(&raw_response);
 
     let parsed: InstrumentBriefingResponse = serde_json::from_str(json_text).map_err(|e| {
-        // Full detail, including the raw response, goes to stderr only; the user
-        // gets a short message rather than a JSON dump.
-        eprintln!("Failed to parse briefing for {instrument}: {e}\nRaw response: {json_text}");
+        // Shape, not content: the response is built from prompts carrying
+        // third-party RSS text, and the log file is meant to be emailed. The
+        // serde error already carries the line and column that localise it.
+        log::error!(
+            "Failed to parse briefing for {instrument}: {e}; response {}",
+            crate::logging::describe_payload(json_text)
+        );
+        crate::logging::debug_excerpt("briefing response", json_text);
         AiEngineError::ResponseParseFailed(format!(
             "nie udało się przetworzyć odpowiedzi AI dla {instrument} - spróbuj ponownie"
         ))
@@ -148,14 +158,13 @@ pub async fn generate_instrument_briefing(
         instrument: instrument.to_string(),
         commentary: parsed.commentary,
         sentiment_impact: parsed.sentiment_impact.clamp(-1.0, 1.0),
-        pine_script_signal: generate_signal_pine_script(instrument, variant),
+        pine_script_signal: generate_signal_pine_script(instrument, ticker, variant),
         pine_script_signal_explanation: explain_signal_pine_script(instrument, variant),
         citations,
     })
 }
 
-fn pine_script_uptrend(instrument: &str) -> String {
-    let ticker = label_to_tv_ticker(instrument);
+fn pine_script_uptrend(instrument: &str, ticker: &str) -> String {
     format!(
         r#"//@version=6
 indicator("Trading Help: {instrument} - Sygnał trendu wzrostowego", overlay=false)
@@ -179,8 +188,7 @@ hline(30, "Wyprzedanie", color=color.green)
     )
 }
 
-fn pine_script_downtrend(instrument: &str) -> String {
-    let ticker = label_to_tv_ticker(instrument);
+fn pine_script_downtrend(instrument: &str, ticker: &str) -> String {
     format!(
         r#"//@version=6
 indicator("Trading Help: {instrument} - Sygnał trendu spadkowego", overlay=false)
@@ -204,8 +212,7 @@ hline(30, "Wyprzedanie", color=color.green)
     )
 }
 
-fn pine_script_consolidation(instrument: &str) -> String {
-    let ticker = label_to_tv_ticker(instrument);
+fn pine_script_consolidation(instrument: &str, ticker: &str) -> String {
     format!(
         r#"//@version=6
 indicator("Trading Help: {instrument} - Konsolidacja", overlay=false)
@@ -226,11 +233,13 @@ hline(30, "Wyprzedanie", color=color.green)
 }
 
 /// Renders the template for the variant chosen by the model; generates nothing.
-pub fn generate_signal_pine_script(instrument: &str, variant: PineVariant) -> String {
+/// Takes an already-resolved TradingView ticker so the renderer stays total -
+/// there is no unknown-instrument case left to guess at down here.
+pub fn generate_signal_pine_script(instrument: &str, ticker: &str, variant: PineVariant) -> String {
     match variant {
-        PineVariant::Uptrend => pine_script_uptrend(instrument),
-        PineVariant::Downtrend => pine_script_downtrend(instrument),
-        PineVariant::Consolidation => pine_script_consolidation(instrument),
+        PineVariant::Uptrend => pine_script_uptrend(instrument, ticker),
+        PineVariant::Downtrend => pine_script_downtrend(instrument, ticker),
+        PineVariant::Consolidation => pine_script_consolidation(instrument, ticker),
     }
 }
 
@@ -288,18 +297,42 @@ mod pine_variant_tests {
     }
 
     #[test]
-    fn all_variants_generate_well_formed_pine_script_for_each_instrument() {
+    fn all_variants_generate_well_formed_pine_script_for_every_catalogued_instrument() {
         for variant in [PineVariant::Uptrend, PineVariant::Downtrend, PineVariant::Consolidation] {
-            for instrument in ["NASDAQ", "SP500", "GOLD", "SILVER"] {
-                assert_well_formed_pine_script(&generate_signal_pine_script(instrument, variant));
+            for instrument in crate::catalog::all() {
+                assert_well_formed_pine_script(&generate_signal_pine_script(
+                    instrument.id,
+                    instrument.tv_ticker,
+                    variant,
+                ));
             }
         }
     }
 
     #[test]
-    fn gold_and_silver_use_dedicated_tickers_not_the_sp500_fallback() {
-        assert!(generate_signal_pine_script("GOLD", PineVariant::Consolidation).contains("TVC:GOLD"));
-        assert!(generate_signal_pine_script("SILVER", PineVariant::Consolidation).contains("TVC:SILVER"));
+    fn every_script_embeds_the_ticker_of_its_own_instrument() {
+        for instrument in crate::catalog::all() {
+            let code =
+                generate_signal_pine_script(instrument.id, instrument.tv_ticker, PineVariant::Consolidation);
+            assert!(
+                code.contains(instrument.tv_ticker),
+                "skrypt dla {} nie zawiera własnego tickera",
+                instrument.id
+            );
+        }
+    }
+
+    #[test]
+    fn gold_and_silver_use_dedicated_tickers() {
+        assert_eq!(label_to_tv_ticker("GOLD"), Some("TVC:GOLD"));
+        assert_eq!(label_to_tv_ticker("SILVER"), Some("TVC:SILVER"));
+    }
+
+    #[test]
+    fn unknown_label_yields_no_ticker_instead_of_the_sp500_fallback() {
+        // The old `_ => "SP:SPX"` produced a valid script for the wrong market.
+        assert_eq!(label_to_tv_ticker("BITCOIN"), None);
+        assert_eq!(label_to_tv_ticker(""), None);
     }
 }
 

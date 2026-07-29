@@ -19,12 +19,20 @@ fn numeric_context_for_instrument(instrument: &str, data: &[models::MarketData])
     )
 }
 
-pub(crate) async fn get_instrument_briefing_inner(instrument: String) -> Result<models::InstrumentBriefing, CommandError> {
+pub(crate) async fn get_instrument_briefing_inner(
+    instrument: String,
+    operation_id: String,
+) -> Result<models::InstrumentBriefing, CommandError> {
+    // The guard removes the registry entry on every exit path, including a panic.
+    let (cancel_token, _guard) = ai_engine::cancel::register(&operation_id);
+
     if !is_supported(&instrument) {
         return Err(CommandError::UnknownInstrument(instrument));
     }
 
-    let data = market_engine::fetch_market_data(yahoo_symbol_for(&instrument))
+    let symbol = yahoo_symbol_for(&instrument)
+        .ok_or_else(|| CommandError::UnknownInstrument(instrument.clone()))?;
+    let data = market_engine::fetch_market_data(symbol)
         .await
         .map_err(CommandError::MarketData)?;
     let numeric_context = numeric_context_for_instrument(&instrument, &data);
@@ -32,17 +40,25 @@ pub(crate) async fn get_instrument_briefing_inner(instrument: String) -> Result<
     // An RSS failure differs from "no news for this instrument"; None carries
     // that distinction into the prompt.
     let filtered_news = match news_engine::fetch_all_news().await {
-        Ok(all_news) => {
-            let keywords = news_engine::keywords_for(&instrument);
-            Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
-        }
+        Ok(all_news) => match news_engine::news_source_for(&instrument) {
+            news_engine::NewsSource::Keywords(keywords) => {
+                Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
+            }
+            // The prompt cannot express "no source assigned" yet: it takes
+            // Option<&[NewsItem]>, where None already means the feed failed.
+            // Carrying the third state further means changing the prompt, the
+            // model and the frontend together, so it waits for the instrument
+            // panel - no sourceless instrument is reachable from the UI today.
+            news_engine::NewsSource::Unassigned => Some(Vec::new()),
+        },
         Err(e) => {
-            eprintln!("Failed to fetch news for {instrument}: {e}");
+            log::warn!("Failed to fetch news for {instrument}: {e}");
             None
         }
     };
 
-    let ai_provider: Box<dyn ai_engine::AiProvider> = Box::new(ai_engine::GeminiProvider);
+    let ai_provider: Box<dyn ai_engine::AiProvider> =
+        Box::new(ai_engine::GeminiProvider::new(ai_engine::CallContext::new(cancel_token)));
     let briefing = ai_engine::generate_instrument_briefing(
         ai_provider.as_ref(),
         &instrument,

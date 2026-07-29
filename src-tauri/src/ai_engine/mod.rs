@@ -7,12 +7,13 @@
 use crate::models::NewsItem;
 use thiserror::Error;
 
+pub mod cancel;
 mod gemini_client;
 mod correlation_pine;
 mod tactic;
 mod briefing;
 
-pub use gemini_client::GeminiProvider;
+pub use gemini_client::{CallContext, GeminiProvider, GEMINI_MODEL};
 pub use correlation_pine::{
     find_strongest_equity_pair, generate_correlation_pine_script, explain_correlation_script,
     generate_gsr_pine_script, explain_gsr_script,
@@ -26,11 +27,26 @@ pub enum AiEngineError {
     #[error("Brak klucza API Gemini. Ustaw go w ustawieniach aplikacji (pierwsze uruchomienie lub panel ustawień).")]
     MissingApiKey,
 
+    /// Raised before the Gemini call, so an instrument missing from the
+    /// catalogue costs no quota.
+    #[error("Instrument {0} nie jest obsługiwany przez aplikację.")]
+    UnknownInstrument(String),
+
     #[error("Nie udało się zainicjalizować klienta HTTP: {0}")]
     ClientBuildFailed(String),
 
     #[error("Błąd połączenia z Gemini API: {0}")]
     ConnectionFailed(String),
+
+    /// Not a failure: the user asked for it. The frontend recognises this
+    /// variant and returns to idle instead of showing an error panel.
+    #[error("Analiza została przerwana.")]
+    Cancelled,
+
+    /// Hard ceiling covering every attempt and backoff together, so a single
+    /// click cannot hang for minutes.
+    #[error("Przekroczono limit czasu ({seconds} s) na odpowiedź od Gemini. Sprawdź połączenie i spróbuj ponownie.")]
+    TimeBudgetExceeded { seconds: u64 },
 
     #[error("Błąd parsowania odpowiedzi Gemini: {0}")]
     ResponseParseFailed(String),
@@ -38,8 +54,16 @@ pub enum AiEngineError {
     #[error("Gemini nie zwróciło żadnej treści")]
     EmptyResponse,
 
-    #[error("Przekroczono darmowy limit zapytań Gemini API (5 zapytań/minutę). Spróbuj ponownie za chwilę.")]
+    /// Per-minute cap: waiting genuinely helps.
+    #[error("Przekroczono minutowy limit zapytań Gemini API. Spróbuj ponownie za chwilę.")]
     RateLimitExceeded,
+
+    /// Per-day cap on the free tier. Telling the user to "try again in a moment"
+    /// here is simply false - the next attempt that can succeed is tomorrow, and
+    /// every attempt before then still consumes quota.
+    #[error("Wyczerpano dzienny limit zapytań do Gemini (darmowy tier: {limit} zapytań na dobę dla tego modelu). \
+             Limit odnawia się o północy czasu pacyficznego, czyli około 9:00 czasu polskiego.")]
+    DailyQuotaExhausted { limit: u32 },
 
     /// 4xx - the request itself is at fault (bad key, malformed body). Retrying
     /// cannot help, so the message must not suggest it. The raw body goes to
@@ -77,16 +101,12 @@ pub trait AiProvider: Send + Sync {
     async fn generate(&self, prompt: String) -> Result<String, AiEngineError>;
 }
 
-/// Maps an instrument label to a TradingView ticker. Shared by
-/// correlation_pine.rs (equity/GSR pair) and briefing.rs (per-instrument signal).
-pub(crate) fn label_to_tv_ticker(label: &str) -> &'static str {
-    match label {
-        "NASDAQ" => "NASDAQ:IXIC",
-        "SP500" => "SP:SPX",
-        "GOLD" => "TVC:GOLD",
-        "SILVER" => "TVC:SILVER",
-        _ => "SP:SPX",
-    }
+/// Maps an instrument id to a TradingView ticker via the catalogue. Returns
+/// `None` for unknown ids: an unrecognised label used to render as "SP:SPX",
+/// which handed the user a working Pine Script pointing at S&P 500 instead of
+/// the instrument they asked about.
+pub(crate) fn label_to_tv_ticker(label: &str) -> Option<&'static str> {
+    crate::catalog::find(label).map(|entry| entry.tv_ticker)
 }
 
 /// Gemini sometimes wraps the response in a ```json fence; strip it before parsing.

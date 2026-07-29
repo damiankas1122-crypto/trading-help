@@ -11,9 +11,28 @@ use super::precious_metals;
 use super::error::CommandError;
 use super::instruments::{is_metal, is_supported, yahoo_symbol_for};
 
+/// Write-path guard using the same predicate the scoring path applies, so
+/// "storable" and "scorable" cannot drift apart (see `is_scorable_price`).
+fn ensure_storable_price(instrument: &str, price: f64) -> Result<(), CommandError> {
+    if tactic_engine::is_scorable_price(price) {
+        return Ok(());
+    }
+    Err(CommandError::InvalidReferencePrice {
+        instrument: instrument.to_string(),
+        price,
+    })
+}
+
 /// On-demand tactic, separate from briefings. Persists to tactic_store for later
 /// verification.
-pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: String) -> Result<models::TradingTactic, CommandError> {
+pub(crate) async fn generate_trading_tactic_inner(
+    app: &AppHandle,
+    instrument: String,
+    operation_id: String,
+) -> Result<models::TradingTactic, CommandError> {
+    // The guard removes the registry entry on every exit path, including a panic.
+    let (cancel_token, _guard) = ai_engine::cancel::register(&operation_id);
+
     if !is_supported(&instrument) {
         return Err(CommandError::UnknownInstrument(instrument));
     }
@@ -31,22 +50,35 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
     // An RSS failure differs from "no news for this instrument"; None carries
     // that distinction into the prompt.
     let filtered_news = match news_engine::fetch_all_news().await {
-        Ok(all_news) => {
-            let keywords = news_engine::keywords_for(&instrument);
-            Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
-        }
+        Ok(all_news) => match news_engine::news_source_for(&instrument) {
+            news_engine::NewsSource::Keywords(keywords) => {
+                Some(news_engine::filter_news_for_instrument(&all_news, keywords, 5))
+            }
+            // See instrument_briefing.rs: the prompt has no way to say "no source
+            // assigned" yet, and that state is unreachable from the UI today.
+            news_engine::NewsSource::Unassigned => Some(Vec::new()),
+        },
         Err(e) => {
-            eprintln!("Failed to fetch news for {instrument}: {e}");
+            log::warn!("Failed to fetch news for {instrument}: {e}");
             None
         }
     };
 
-    let price_history = market_engine::fetch_market_data(yahoo_symbol_for(&instrument))
+    let symbol = yahoo_symbol_for(&instrument)
+        .ok_or_else(|| CommandError::UnknownInstrument(instrument.clone()))?;
+    let price_history = market_engine::fetch_market_data(symbol)
         .await
         .map_err(CommandError::MarketData)?;
+    // Second barrier behind the validation in market_engine, because this path
+    // writes unreproducible data: a tactic stored with reference_price = 0.0
+    // makes every target price 0.0 too, so evaluate_outcome scores it as a hit
+    // forever and inflates the track record. Checked before the Gemini call, so
+    // a broken price costs no quota.
     let reference_price = price_history.last().map(|d| d.close).unwrap_or(0.0);
+    ensure_storable_price(&instrument, reference_price)?;
 
-    let ai_provider: Box<dyn ai_engine::AiProvider> = Box::new(ai_engine::GeminiProvider);
+    let ai_provider: Box<dyn ai_engine::AiProvider> =
+        Box::new(ai_engine::GeminiProvider::new(ai_engine::CallContext::new(cancel_token)));
     let tactic = ai_engine::generate_trading_tactic(
         ai_provider.as_ref(),
         &instrument,
@@ -55,6 +87,10 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
         reference_price,
     )
     .await?;
+
+    // The price the model echoed back is what actually gets stored and scored,
+    // so it is checked again rather than trusting the value sent into the prompt.
+    ensure_storable_price(&tactic.instrument, tactic.reference_price)?;
 
     let generated_at = OffsetDateTime::now_utc().unix_timestamp();
     let tracked = models::TrackedTactic {
@@ -81,6 +117,9 @@ pub(crate) async fn generate_trading_tactic_inner(app: &AppHandle, instrument: S
 pub(crate) async fn get_tactic_track_record_inner(app: &AppHandle) -> Result<models::TacticTrackRecord, CommandError> {
     let mut tactics = tactic_store::load_all(app);
     let now = OffsetDateTime::now_utc().unix_timestamp();
+    // This command runs every time the statistics are opened, so without this
+    // flag the most frequent path would also rewrite the file most often.
+    let mut changed = false;
 
     // Per-call price cache: several tactics on one instrument share a single fetch.
     let mut price_cache: std::collections::HashMap<&'static str, Vec<models::MarketData>> = std::collections::HashMap::new();
@@ -92,7 +131,13 @@ pub(crate) async fn get_tactic_track_record_inner(app: &AppHandle) -> Result<mod
             continue;
         }
 
-        let symbol = yahoo_symbol_for(&tactic.instrument);
+        // Stored tactics may name an instrument no longer in the catalogue.
+        // Skipping leaves them unverified, which beats scoring them against
+        // another instrument's prices.
+        let Some(symbol) = yahoo_symbol_for(&tactic.instrument) else {
+            log::warn!("Skipping verification of unknown instrument: {}", tactic.instrument);
+            continue;
+        };
         if !price_cache.contains_key(symbol) {
             if let Ok(data) = market_engine::fetch_market_data(symbol).await {
                 price_cache.insert(symbol, data);
@@ -107,6 +152,7 @@ pub(crate) async fn get_tactic_track_record_inner(app: &AppHandle) -> Result<mod
                     outcome: outcome.to_string(),
                     checked_at: now,
                 });
+                changed = true;
             }
         }
         if needs_7d {
@@ -116,10 +162,39 @@ pub(crate) async fn get_tactic_track_record_inner(app: &AppHandle) -> Result<mod
                     outcome: outcome.to_string(),
                     checked_at: now,
                 });
+                changed = true;
             }
         }
     }
 
-    tactic_store::save_all(app, &tactics).map_err(CommandError::Storage)?;
+    if changed {
+        tactic_store::save_all(app, &tactics).map_err(CommandError::Storage)?;
+    }
     Ok(tactic_engine::compute_track_record(&tactics))
+}
+
+#[cfg(test)]
+mod reference_price_tests {
+    use super::*;
+
+    #[test]
+    fn zero_price_is_never_storable() {
+        let err = ensure_storable_price("GOLD", 0.0).unwrap_err();
+        assert!(matches!(err, CommandError::InvalidReferencePrice { .. }));
+    }
+
+    #[test]
+    fn negative_and_non_finite_prices_are_rejected() {
+        for price in [-1.0, f64::NAN, f64::INFINITY] {
+            assert!(
+                ensure_storable_price("GOLD", price).is_err(),
+                "cena {price} nie powinna być zapisywalna"
+            );
+        }
+    }
+
+    #[test]
+    fn ordinary_price_passes() {
+        assert!(ensure_storable_price("GOLD", 2410.5).is_ok());
+    }
 }

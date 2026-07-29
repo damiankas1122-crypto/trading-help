@@ -20,6 +20,13 @@ const MACD_FAST: usize = 12;
 const MACD_SLOW: usize = 26;
 const MACD_SIGNAL: usize = 9;
 
+/// Shortest close series that yields a real MACD signal line: the slow EMA
+/// consumes `MACD_SLOW` points before the first MACD value, and the signal line
+/// needs `MACD_SIGNAL` MACD values on top. Exported so data fetching can reject
+/// a series up front instead of letting the indicators return their
+/// "not computed" defaults, which are indistinguishable from a neutral market.
+pub const MIN_CLOSES_FOR_INDICATORS: usize = MACD_SLOW + MACD_SIGNAL - 1;
+
 /// Wilder's RSI(14). Falls back to 50.0 on insufficient data - a default, not a signal.
 pub fn calculate_rsi(closes: &[f64]) -> f64 {
     if closes.len() < RSI_PERIOD + 1 {
@@ -65,7 +72,7 @@ fn ema_series(values: &[f64], period: usize) -> Vec<f64> {
 /// MACD(12,26,9). Returns (0.0, 0.0) when history is too short - meaning
 /// "not computed", not a neutral signal.
 pub fn calculate_macd(closes: &[f64]) -> (f64, f64) {
-    if closes.len() < MACD_SLOW + MACD_SIGNAL - 1 {
+    if closes.len() < MIN_CLOSES_FOR_INDICATORS {
         return (0.0, 0.0);
     }
 

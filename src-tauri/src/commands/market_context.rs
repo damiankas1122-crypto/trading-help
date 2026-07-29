@@ -3,12 +3,18 @@
 //! `instrument_briefing.rs`); feeds the ticker tape and the market context
 //! panel. No #[tauri::command] here.
 
-use crate::{models, history_store, ai_engine};
+use crate::{models, history_store, ai_engine, catalog};
 use tauri::AppHandle;
 use time::OffsetDateTime;
 use super::cross_market;
 use super::precious_metals;
 use super::error::CommandError;
+
+/// Splits a "LEADER->FOLLOWER" report symbol back into catalogue entries.
+fn resolve_pair(pair_symbol: &str) -> Option<(&'static catalog::Instrument, &'static catalog::Instrument)> {
+    let (leader, follower) = pair_symbol.split_once("->")?;
+    Some((catalog::find(leader.trim())?, catalog::find(follower.trim())?))
+}
 
 pub(crate) async fn get_market_context_inner(app: AppHandle) -> Result<models::MarketContext, CommandError> {
     let equity_reports = cross_market::get_cross_market_analysis_inner().await?;
@@ -17,8 +23,14 @@ pub(crate) async fn get_market_context_inner(app: AppHandle) -> Result<models::M
     let strongest_equity = ai_engine::find_strongest_equity_pair(&equity_reports)
         .ok_or(CommandError::NoStrongestPair)?;
 
-    let pine_script_correlation = ai_engine::generate_correlation_pine_script(&strongest_equity.symbol);
-    let pine_script_correlation_explanation = ai_engine::explain_correlation_script(&strongest_equity.symbol);
+    // Both sides must be catalogued before a script is emitted; an unresolvable
+    // pair used to render as NASDAQ/SP500, handing the user a correct-looking
+    // script about a market they did not ask about.
+    let (leader, follower) = resolve_pair(&strongest_equity.symbol)
+        .ok_or_else(|| CommandError::UnknownInstrument(strongest_equity.symbol.clone()))?;
+
+    let pine_script_correlation = ai_engine::generate_correlation_pine_script(leader, follower);
+    let pine_script_correlation_explanation = ai_engine::explain_correlation_script(leader, follower);
     let pine_script_gsr = ai_engine::generate_gsr_pine_script();
     let pine_script_gsr_explanation = ai_engine::explain_gsr_script();
 

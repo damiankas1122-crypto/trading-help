@@ -5,8 +5,23 @@ pub const HOUR_24_SECONDS: i64 = 24 * 60 * 60;
 pub const DAYS_7_SECONDS: i64 = 7 * HOUR_24_SECONDS;
 
 
+/// Single definition of "a price that can be scored", shared by the write path
+/// (which refuses to store such a tactic) and the read path (which refuses to
+/// score one already stored). At 0.0 every derived level is also 0.0, so
+/// `high >= target` holds on any candle and the tactic counts as a win forever;
+/// with NaN or infinity every comparison is false instead, so it never resolves.
+pub fn is_scorable_price(price: f64) -> bool {
+    price.is_finite() && price > 0.0
+}
+
 pub fn evaluate_outcome(tactic: &TrackedTactic, price_history: &[MarketData], until: i64) -> Option<&'static str> {
     if tactic.scenario == "neutral" {
+        return None;
+    }
+
+    // Tactics stored before price validation existed keep their rows as evidence,
+    // but must never receive a fresh verdict.
+    if !is_scorable_price(tactic.reference_price) {
         return None;
     }
 
@@ -47,9 +62,17 @@ pub fn compute_track_record(tactics: &[TrackedTactic]) -> TacticTrackRecord {
         verified_24h_hits: 0,
         verified_7d_total: 0,
         verified_7d_hits: 0,
+        skipped_invalid_reference_price: 0,
     };
 
     for tactic in tactics {
+        // Counted once per tactic, not per verification window, and reported
+        // separately: a silently smaller `n` reads as lost data.
+        if !is_scorable_price(tactic.reference_price) {
+            record.skipped_invalid_reference_price += 1;
+            continue;
+        }
+
         if let Some(v) = &tactic.verified_24h {
             record.verified_24h_total += 1;
             if v.outcome == "target_hit" {
@@ -164,6 +187,51 @@ mod tests {
             candle(3000, 90.0, 80.0),   // dzień 2: stop by też trafił, ale liczy się dzień 1
         ];
         assert_eq!(evaluate_outcome(&t, &history, 4000), Some("target_hit"));
+    }
+
+    #[test]
+    fn tactic_with_unscorable_price_gets_no_verdict() {
+        for price in [0.0, -5.0, f64::NAN, f64::INFINITY] {
+            let t = tactic("bull", price, 2.0, -1.0);
+            // A candle that would satisfy any comparison against a zero target.
+            let history = vec![candle(2000, 103.0, 100.5)];
+            assert_eq!(
+                evaluate_outcome(&t, &history, 3000),
+                None,
+                "cena {price} nie powinna dawać werdyktu"
+            );
+        }
+    }
+
+    #[test]
+    fn unscorable_tactics_are_counted_separately_not_scored() {
+        use crate::models::TacticVerification;
+
+        let verified = |mut t: TrackedTactic| {
+            t.verified_24h = Some(TacticVerification { outcome: "target_hit".to_string(), checked_at: 5000 });
+            t.verified_7d = Some(TacticVerification { outcome: "target_hit".to_string(), checked_at: 5000 });
+            t
+        };
+
+        // Verdicts written before the guard existed must not be re-counted now.
+        let zero = verified(tactic("bull", 0.0, 2.0, -1.0));
+        let nan = verified(tactic("bull", f64::NAN, 2.0, -1.0));
+        let infinite = verified(tactic("bull", f64::INFINITY, 2.0, -1.0));
+        let good = verified(tactic("bull", 100.0, 2.0, -1.0));
+
+        let record = compute_track_record(&[zero, nan, infinite, good]);
+
+        assert_eq!(record.skipped_invalid_reference_price, 3);
+        assert_eq!(record.verified_24h_total, 1);
+        assert_eq!(record.verified_24h_hits, 1);
+        assert_eq!(record.verified_7d_total, 1);
+        assert_eq!(record.verified_7d_hits, 1);
+    }
+
+    #[test]
+    fn nothing_is_skipped_when_every_price_is_valid() {
+        let record = compute_track_record(&[tactic("bull", 100.0, 2.0, -1.0)]);
+        assert_eq!(record.skipped_invalid_reference_price, 0);
     }
 
     #[test]

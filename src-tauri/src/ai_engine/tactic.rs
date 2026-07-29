@@ -73,9 +73,13 @@ pub async fn generate_trading_tactic(
     let json_text = strip_json_fence(&raw_response);
 
     let parsed: TacticResponse = serde_json::from_str(json_text).map_err(|e| {
-        // Full detail, including the raw response, goes to stderr only; the user
-        // gets a short message rather than a JSON dump.
-        eprintln!("Failed to parse tactic for {instrument}: {e}\nRaw response: {json_text}");
+        // Shape, not content - see briefing.rs for why the payload never lands
+        // in the file.
+        log::error!(
+            "Failed to parse tactic for {instrument}: {e}; response {}",
+            crate::logging::describe_payload(json_text)
+        );
+        crate::logging::debug_excerpt("tactic response", json_text);
         AiEngineError::ResponseParseFailed(format!(
             "nie udało się przetworzyć odpowiedzi AI dla {instrument} - spróbuj ponownie"
         ))

@@ -1,5 +1,7 @@
 // src-tauri/src/lib.rs
 pub mod models;
+pub mod catalog;
+pub mod logging;
 pub mod market_engine;
 pub mod analysis_engine;
 pub mod ai_engine;
@@ -13,6 +15,24 @@ pub mod keychain;
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            use tauri::Manager;
+
+            // A missing or unusable log directory degrades to no log file; it
+            // never blocks startup.
+            let log_path = app.path().app_log_dir().ok().and_then(|dir| logging::init(&dir));
+
+            logging::log_startup(
+                env!("CARGO_PKG_VERSION"),
+                ai_engine::GEMINI_MODEL,
+                tactic_store::load_all(app.handle()).len(),
+                keychain::has_gemini_api_key(),
+            );
+            if log_path.is_none() {
+                log::warn!("Log directory unavailable; running without a log file");
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
@@ -28,7 +48,9 @@ pub fn run() {
              commands::get_last_snapshot,
              commands::save_gemini_api_key,
              commands::has_gemini_api_key,
-             commands::delete_gemini_api_key
+             commands::delete_gemini_api_key,
+             commands::open_log_directory,
+             commands::cancel_operation
         ])
         .run(tauri::generate_context!())
         .expect("failed to start application");

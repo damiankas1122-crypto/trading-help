@@ -1,11 +1,11 @@
 //! Pine Script for equity correlation (NASDAQ<->SP500) and the Gold/Silver
 //! Ratio - both hand-written templates, no AI. `find_strongest_equity_pair`
 //! decides which equity pair reaches `generate_correlation_pine_script` (see
-//! commands/market_context.rs). Depends on no other ai_engine submodule beyond
-//! `label_to_tv_ticker` from `mod.rs`.
+//! commands/market_context.rs). Depends on no other ai_engine submodule; the
+//! TradingView tickers come from the catalogue entries passed in by the caller.
 
+use crate::catalog::Instrument;
 use crate::models::AnalyticalReport;
-use super::label_to_tv_ticker;
 
 /// "Strongest" is measured only across the equity reports passed in by the
 /// caller (today NASDAQ<->SP500); metals have their own GSR script and never
@@ -21,16 +21,13 @@ pub fn find_strongest_equity_pair(reports: &[AnalyticalReport]) -> Option<&Analy
     })
 }
 
-pub fn generate_correlation_pine_script(equity_pair_symbol: &str) -> String {
-    let parts: Vec<&str> = equity_pair_symbol.split("->").collect();
-    let (leader_label, follower_label) = if parts.len() == 2 {
-        (parts[0], parts[1])
-    } else {
-        ("NASDAQ", "SP500")
-    };
-
-    let leader_ticker = label_to_tv_ticker(leader_label);
-    let follower_ticker = label_to_tv_ticker(follower_label);
+/// Takes resolved catalogue entries rather than a "LEADER->FOLLOWER" string:
+/// parsing it here meant an unparseable pair silently rendered a NASDAQ/SP500
+/// script. Resolution now happens in the command layer, which can report the
+/// failure instead of substituting another market.
+pub fn generate_correlation_pine_script(leader: &Instrument, follower: &Instrument) -> String {
+    let (leader_label, follower_label) = (leader.label, follower.label);
+    let (leader_ticker, follower_ticker) = (leader.tv_ticker, follower.tv_ticker);
 
     format!(
         r#"//@version=6
@@ -57,13 +54,8 @@ hline(-0.5, "-0.5", color=color.red)
 }
 
 /// Fixed explanation of the correlation script.
-pub fn explain_correlation_script(equity_pair_symbol: &str) -> String {
-    let parts: Vec<&str> = equity_pair_symbol.split("->").collect();
-    let (leader_label, follower_label) = if parts.len() == 2 {
-        (parts[0], parts[1])
-    } else {
-        ("NASDAQ", "SP500")
-    };
+pub fn explain_correlation_script(leader: &Instrument, follower: &Instrument) -> String {
+    let (leader_label, follower_label) = (leader.label, follower.label);
 
     format!(
         "Ten wskaźnik pokazuje, jak silnie {leader_label} 'przewiduje' ruch {follower_label} \

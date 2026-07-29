@@ -45,17 +45,32 @@ pub async fn get_market_context(app: AppHandle) -> Result<models::MarketContext,
 }
 
 #[tauri::command]
-pub async fn get_instrument_briefing(instrument: String) -> Result<models::InstrumentBriefing, String> {
-    instrument_briefing::get_instrument_briefing_inner(instrument)
+pub async fn get_instrument_briefing(
+    instrument: String,
+    operation_id: String,
+) -> Result<models::InstrumentBriefing, String> {
+    instrument_briefing::get_instrument_briefing_inner(instrument, operation_id)
         .await
         .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn generate_trading_tactic(app: AppHandle, instrument: String) -> Result<models::TradingTactic, String> {
-    tactics::generate_trading_tactic_inner(&app, instrument)
+pub async fn generate_trading_tactic(
+    app: AppHandle,
+    instrument: String,
+    operation_id: String,
+) -> Result<models::TradingTactic, String> {
+    tactics::generate_trading_tactic_inner(&app, instrument, operation_id)
         .await
         .map_err(|e| e.to_string())
+}
+
+/// Cancels an in-flight AI call. `false` means there was nothing to cancel -
+/// an ordinary outcome after a reopened window or a call that just finished,
+/// not an error worth surfacing.
+#[tauri::command]
+pub fn cancel_operation(operation_id: String) -> bool {
+    crate::ai_engine::cancel::cancel(&operation_id)
 }
 
 #[tauri::command]
@@ -83,4 +98,23 @@ pub fn has_gemini_api_key() -> bool {
 #[tauri::command]
 pub fn delete_gemini_api_key() -> Result<(), String> {
     keychain::delete_gemini_api_key().map_err(|e| CommandError::Keychain(e).to_string())
+}
+
+/// Opens the log directory in the system file manager. The path comes from
+/// Tauri, never from the frontend, so there is nothing for a caller to point
+/// elsewhere.
+#[tauri::command]
+pub fn open_log_directory(app: AppHandle) -> Result<(), String> {
+    use tauri::Manager;
+    use tauri_plugin_opener::OpenerExt;
+
+    let dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| format!("Nie udało się ustalić katalogu z logami: {e}"))?;
+    std::fs::create_dir_all(&dir).map_err(|e| format!("Nie udało się utworzyć katalogu z logami: {e}"))?;
+
+    app.opener()
+        .open_path(dir.to_string_lossy(), None::<&str>)
+        .map_err(|e| format!("Nie udało się otworzyć katalogu z logami: {e}"))
 }
