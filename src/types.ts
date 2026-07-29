@@ -64,6 +64,8 @@ export type TacticTrackRecord = {
   verified_24h_hits: number;
   verified_7d_total: number;
   verified_7d_hits: number;
+  /** Stored tactics left out of the statistics because their reference price cannot be scored. */
+  skipped_invalid_reference_price: number;
 };
 
 export type MarketContext = {

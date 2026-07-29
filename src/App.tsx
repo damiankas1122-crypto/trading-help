@@ -5,6 +5,7 @@ import type { MarketContext, Snapshot, ViewId, TradingTactic, InstrumentBriefing
 import { INSTRUMENTS } from "./constants";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { formatErrorMessage } from "./utils/format";
+import { cancelOperation, isCancellation, newOperationId } from "./utils/aiOperations";
 import { TickerTape } from "./components/TickerTape";
 import { ViewNav } from "./components/ViewNav";
 import { InstrumentSearch } from "./components/InstrumentSearch";
@@ -32,6 +33,7 @@ function App() {
   const [instrumentBriefings, setInstrumentBriefings] = useState<Record<string, InstrumentBriefing | null>>({});
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingError, setBriefingError] = useState<string | null>(null);
+  const [briefingOperationId, setBriefingOperationId] = useState<string | null>(null);
 
   useEffect(() => {
     invoke<Snapshot | null>("get_last_snapshot")
@@ -69,16 +71,25 @@ function App() {
   }, []);
 
   const runInstrumentBriefing = async (instrument: string) => {
+    const operationId = newOperationId();
+    setBriefingOperationId(operationId);
     setBriefingLoading(true);
     setBriefingError(null);
     try {
-      const result = await invoke<InstrumentBriefing>("get_instrument_briefing", { instrument });
+      const result = await invoke<InstrumentBriefing>("get_instrument_briefing", {
+        instrument,
+        operationId,
+      });
       setInstrumentBriefings((prev) => ({ ...prev, [instrument]: result }));
     } catch (err) {
-      console.error("Briefing failed:", err);
-      setBriefingError(formatErrorMessage(err));
+      // Cancelling returns to idle: no error panel, nothing to explain.
+      if (!isCancellation(err)) {
+        console.error("Briefing failed:", err);
+        setBriefingError(formatErrorMessage(err));
+      }
     } finally {
       setBriefingLoading(false);
+      setBriefingOperationId(null);
     }
   };
 
@@ -132,6 +143,9 @@ function App() {
               briefingLoading={briefingLoading}
               briefingError={briefingError}
               onAnalyze={() => runInstrumentBriefing(focusedInstrument)}
+              onCancelAnalysis={
+                briefingOperationId ? () => cancelOperation(briefingOperationId) : undefined
+              }
             />
           )}
           {activeView === "taktyka" && (

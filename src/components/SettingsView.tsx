@@ -8,6 +8,17 @@ export function SettingsView({ onKeyDeleted }: { onKeyDeleted: () => void }) {
   // confirmation in the same styling.
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [logError, setLogError] = useState<string | null>(null);
+
+  const handleOpenLogs = async () => {
+    setLogError(null);
+    try {
+      await invoke("open_log_directory");
+    } catch (err) {
+      console.error("Failed to open the log directory:", err);
+      setLogError(formatErrorMessage(err));
+    }
+  };
 
   const handleDelete = async () => {
     setError(null);
@@ -58,6 +69,20 @@ export function SettingsView({ onKeyDeleted }: { onKeyDeleted: () => void }) {
         )}
 
         {error && <p className="text-xs text-term-red font-mono mt-3">{error}</p>}
+      </Panel>
+
+      <Panel title="Diagnostyka">
+        <p className="text-xs text-term-dim mb-3">
+          Aplikacja zapisuje lokalny plik z logiem błędów — bez kluczy API i bez treści zapytań do AI. Nic nie jest
+          nigdzie wysyłane; plik możesz dołączyć do zgłoszenia problemu.
+        </p>
+        <button
+          onClick={handleOpenLogs}
+          className="px-4 py-2 border border-term-line-strong text-term-dim text-xs font-bold uppercase tracking-wide hover:border-term-cyan hover:text-term-cyan transition-colors"
+        >
+          Otwórz folder z logami
+        </button>
+        {logError && <p className="text-xs text-term-red font-mono mt-3">{logError}</p>}
       </Panel>
     </div>
   );

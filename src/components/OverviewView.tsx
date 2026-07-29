@@ -27,6 +27,7 @@ export function OverviewView({
   briefingLoading,
   briefingError,
   onAnalyze,
+  onCancelAnalysis,
 }: {
   instrument: string;
   marketContext: MarketContext | null;
@@ -38,6 +39,8 @@ export function OverviewView({
   briefingLoading: boolean;
   briefingError: string | null;
   onAnalyze: () => void;
+  /** Present only while a call is in flight, which is also when the button shows. */
+  onCancelAnalysis?: () => void;
 }) {
   const numeric = marketContext
     ? instrumentDataFor(instrument, marketContext.equity_reports, marketContext.metals_report)
@@ -75,13 +78,23 @@ export function OverviewView({
         <p className="text-xs text-term-dim mb-3">
           Analiza jednego instrumentu na żądanie - jedno wywołanie AI, bez czekania na resztę watchlisty.
         </p>
-        <button
-          onClick={onAnalyze}
-          disabled={briefingLoading}
-          className="px-4 py-2 border border-term-amber text-term-amber text-xs font-bold uppercase tracking-wide hover:bg-term-amber/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-        >
-          {briefingLoading ? `Analizuję ${instrument}...` : `Analizuj ${instrument}`}
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={onAnalyze}
+            disabled={briefingLoading}
+            className="px-4 py-2 border border-term-amber text-term-amber text-xs font-bold uppercase tracking-wide hover:bg-term-amber/10 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          >
+            {briefingLoading ? `Analizuję ${instrument}...` : `Analizuj ${instrument}`}
+          </button>
+          {briefingLoading && onCancelAnalysis && (
+            <button
+              onClick={onCancelAnalysis}
+              className="px-3 py-2 border border-term-line-strong text-term-dim text-xs font-bold uppercase tracking-wide hover:border-term-red hover:text-term-red transition-colors"
+            >
+              Przerwij
+            </button>
+          )}
+        </div>
         {marketContext && (
           <p className="text-[11px] text-term-faint mt-2">
             Dane rynkowe zaktualizowane: {formatUnixTimestamp(marketContext.timestamp)}
