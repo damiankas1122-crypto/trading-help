@@ -2,6 +2,29 @@
 
 All notable changes to Trading Help are documented here.
 
+## [Unreleased]
+
+### Changed
+- Correlation is now joined on trading dates instead of series length; pairs with
+  different session calendars no longer correlate returns from different days (A-03).
+- `correlation` is `Option<f64>` across the model: zero is a measurement result and
+  no longer doubles as "not measured".
+- Reports carry `overlapping_observations` — the number of shared sessions a
+  coefficient was computed from.
+- Prompt context omits correlation entirely when unmeasured, rather than passing a
+  placeholder the model would comment on.
+
+### Fixed
+- `to_returns` dropped observations instead of marking gaps, silently shifting every
+  later return by one session. Removed.
+- `find_strongest_equity_pair` excludes unmeasured and non-finite correlations from
+  the ranking instead of ordering them last.
+
+### Known issue
+- `get_market_context` still fails wholesale when no equity pair has a measured
+  correlation (`NoStrongestPair`); the Pine correlation script needs to become
+  optional. Frontend does not yet know about the changed contract — not releasable.
+
 ## [0.4.3] - 2026-07-29
 
 ### Added

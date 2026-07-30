@@ -9,16 +9,34 @@ use crate::models::AnalyticalReport;
 
 /// "Strongest" is measured only across the equity reports passed in by the
 /// caller (today NASDAQ<->SP500); metals have their own GSR script and never
-/// enter this comparison. `None` occurs only for empty input, which
-/// `get_cross_market_analysis_inner` cannot produce - it returns two reports or
-/// an error.
+/// enter this comparison.
+///
+/// Returns `None` for empty input and, since correlation became optional, when
+/// no report carries a usable figure. That case has to end with no correlation
+/// script at all: a Pine indicator plotting `ta.correlation` for a pair whose
+/// correlation was never measured is the same error as printing the number.
+///
+/// Two traps live in this comparison, both avoided deliberately:
+///
+/// - `Option<f64>` implements `PartialOrd` with `None < Some(_)`, so comparing
+///   the options directly compiles, ranks an unmeasured pair as merely the
+///   weakest, and - if `.abs()` slips out in the rewrite - lets +0.1 beat -0.9.
+///   Unmeasured reports are filtered out before any comparison rather than
+///   ordered against measured ones, and `.abs()` is applied inside `Some`.
+/// - `Some(NaN)` is a separate case from `None`: measured, but not comparable.
+///   It is dropped here too, so `partial_cmp` below always has a total order and
+///   no ordering fallback can hand it the win.
 pub fn find_strongest_equity_pair(reports: &[AnalyticalReport]) -> Option<&AnalyticalReport> {
-    reports.iter().max_by(|a, b| {
-        a.correlation
-            .abs()
-            .partial_cmp(&b.correlation.abs())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    })
+    reports
+        .iter()
+        .filter_map(|report| {
+            report
+                .correlation
+                .filter(|value| value.is_finite())
+                .map(|value| (report, value.abs()))
+        })
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
+        .map(|(report, _)| report)
 }
 
 /// Takes resolved catalogue entries rather than a "LEADER->FOLLOWER" string:
@@ -112,10 +130,11 @@ pub fn explain_gsr_script() -> String {
 mod find_strongest_equity_pair_tests {
     use super::*;
 
-    fn report(symbol: &str, correlation: f64) -> AnalyticalReport {
+    fn report(symbol: &str, correlation: Option<f64>) -> AnalyticalReport {
         AnalyticalReport {
             symbol: symbol.to_string(),
             correlation,
+            overlapping_observations: correlation.map_or(0, |_| 40),
             volatility: 0.0,
             technicals: crate::models::TechnicalIndicators { rsi: 50.0, macd_line: 0.0, macd_signal: 0.0 },
             latest_close: 0.0,
@@ -127,9 +146,9 @@ mod find_strongest_equity_pair_tests {
     #[test]
     fn picks_report_with_highest_absolute_correlation() {
         let reports = vec![
-            report("NASDAQ->SP500", 0.2),
-            report("SP500->NASDAQ", 0.85),
-            report("GOLD->SILVER", -0.4),
+            report("NASDAQ->SP500", Some(0.2)),
+            report("SP500->NASDAQ", Some(0.85)),
+            report("GOLD->SILVER", Some(-0.4)),
         ];
 
         let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
@@ -139,8 +158,8 @@ mod find_strongest_equity_pair_tests {
     #[test]
     fn negative_correlation_with_larger_magnitude_beats_smaller_positive() {
         let reports = vec![
-            report("NASDAQ->SP500", 0.3),
-            report("GOLD->SILVER", -0.9),
+            report("NASDAQ->SP500", Some(0.3)),
+            report("GOLD->SILVER", Some(-0.9)),
         ];
 
         let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
@@ -148,14 +167,76 @@ mod find_strongest_equity_pair_tests {
     }
 
     #[test]
+    fn strong_negative_still_beats_weak_positive_after_the_option_rewrite() {
+        // Comparing the options directly would compile and drop `.abs()`, letting
+        // +0.1 win.
+        let reports = vec![
+            report("NASDAQ->SP500", Some(0.1)),
+            report("SP500->NASDAQ", Some(-0.9)),
+        ];
+
+        let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
+        assert_eq!(strongest.symbol, "SP500->NASDAQ");
+    }
+
+    #[test]
+    fn unmeasured_pair_is_excluded_rather_than_ranked_last() {
+        // `None < Some(_)` would place the unmeasured pair at the bottom, which is
+        // right here by accident; the point is that it is never a candidate.
+        let reports = vec![
+            report("NASDAQ->SP500", None),
+            report("SP500->NASDAQ", Some(0.4)),
+        ];
+
+        let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
+        assert_eq!(strongest.symbol, "SP500->NASDAQ");
+        assert_eq!(strongest.correlation, Some(0.4));
+    }
+
+    #[test]
+    fn no_measured_correlation_means_no_pair_to_script() {
+        let reports = vec![
+            report("NASDAQ->SP500", None),
+            report("SP500->NASDAQ", None),
+        ];
+
+        assert!(find_strongest_equity_pair(&reports).is_none());
+    }
+
+    #[test]
     fn does_not_panic_when_correlation_is_nan() {
         let reports = vec![
-            report("NASDAQ->SP500", f64::NAN),
-            report("SP500->NASDAQ", 0.5),
+            report("NASDAQ->SP500", Some(f64::NAN)),
+            report("SP500->NASDAQ", Some(0.5)),
         ];
 
         let result = find_strongest_equity_pair(&reports);
         assert!(result.is_some());
+    }
+
+    #[test]
+    fn nan_never_wins_against_a_measured_correlation() {
+        // `Some(NaN)` is measured but not comparable; it must not survive the
+        // ordering fallback, whatever position it holds in the list.
+        let leading_nan = vec![
+            report("NASDAQ->SP500", Some(f64::NAN)),
+            report("SP500->NASDAQ", Some(0.5)),
+        ];
+        let trailing_nan = vec![
+            report("SP500->NASDAQ", Some(0.5)),
+            report("NASDAQ->SP500", Some(f64::NAN)),
+        ];
+
+        for reports in [leading_nan, trailing_nan] {
+            let strongest = find_strongest_equity_pair(&reports).expect("expected a report");
+            assert_eq!(strongest.symbol, "SP500->NASDAQ");
+        }
+    }
+
+    #[test]
+    fn only_nan_correlations_leave_nothing_to_pick() {
+        let reports = vec![report("NASDAQ->SP500", Some(f64::NAN))];
+        assert!(find_strongest_equity_pair(&reports).is_none());
     }
 
     #[test]
