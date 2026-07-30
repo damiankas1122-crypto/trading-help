@@ -23,7 +23,19 @@ pub struct TechnicalIndicators {
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AnalyticalReport {
     pub symbol: String,
-    pub correlation: f64,
+    /// `None` means the correlation was not measured - too few shared sessions.
+    /// 0.0 is a valid reading (no linear relationship) and cannot double as a
+    /// failure code.
+    pub correlation: Option<f64>,
+    /// Shared session days the correlation was computed from.
+    ///
+    /// `#[serde(default)]` is a migration requirement, not a convenience: records
+    /// written before this field existed would otherwise fail to deserialize and
+    /// take the whole snapshot history file down with them. A stored 0 means
+    /// "unknown, pre-measurement record", which is how a zero sample size has to
+    /// be read anyway.
+    #[serde(default)]
+    pub overlapping_observations: usize,
     pub volatility: f64,
     pub technicals: TechnicalIndicators,
     /// Latest close of the leader; feeds the ticker tape.
@@ -34,7 +46,12 @@ pub struct AnalyticalReport {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct PreciousMetalsReport {
-    pub correlation: f64,
+    /// See `AnalyticalReport::correlation` for why this is an `Option`.
+    pub correlation: Option<f64>,
+    /// Gold and silver futures are the pair whose session calendars actually
+    /// diverge, so the sample size behind the correlation matters most here.
+    #[serde(default)]
+    pub overlapping_observations: usize,
     pub current_gsr: f64,
     pub gsr_30d_ago: f64,
     pub gsr_change_pct: f64,
