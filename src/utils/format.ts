@@ -6,11 +6,25 @@ export function hitRatePct(hits: number, total: number): string {
   return total === 0 ? "brak danych" : `${Math.round((hits / total) * 100)}% (n=${total})`;
 }
 
-/** Backend timestamps arrive as unix seconds in a string (OffsetDateTime::unix_timestamp). */
-export function formatUnixTimestamp(unixSeconds: string): string {
+/**
+ * Date + time for every data-age label. Deliberately no time-only variant: a
+ * bare "09:12" hides the age of anything older than today, which is exactly
+ * how a stale snapshot passed for live data.
+ */
+export function formatUnixDateTime(unixSeconds: string | number): string {
   const n = Number(unixSeconds);
   if (!Number.isFinite(n)) return "?";
-  return new Date(n * 1000).toLocaleTimeString("pl-PL", { hour: "2-digit", minute: "2-digit" });
+  return new Date(n * 1000).toLocaleString("pl-PL", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+/** Backend sends null when the correlation was not measured (too few shared sessions). */
+export function formatCorrelation(value: number | null): string {
+  return value === null ? "—" : value.toFixed(3);
 }
 
 const MAX_ERROR_LENGTH = 300;

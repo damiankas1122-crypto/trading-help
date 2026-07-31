@@ -9,7 +9,8 @@ import type { AnalyticalReport, PreciousMetalsReport, TechnicalIndicators } from
 export type InstrumentData = {
   price: number;
   changePct: number;
-  correlation: number;
+  /** null = not measured; render via formatCorrelation, never .toFixed(). */
+  correlation: number | null;
   /** What the correlation is measured against; "0.187" alone means nothing. */
   correlatedWith: string | null;
   volatility: number;

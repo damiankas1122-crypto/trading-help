@@ -101,6 +101,22 @@ pub struct Snapshot {
     pub timestamp: String,
 }
 
+/// Current quote taken from chart metadata: one light request, no candles.
+/// Feeds the ticker tape on a short interval, independently of the heavy
+/// analytical context (which stays on its own 5-minute cadence).
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LiveQuote {
+    /// Catalogue id, not a Yahoo symbol.
+    pub instrument: String,
+    pub price: f64,
+    pub previous_close: f64,
+    pub daily_change_pct: f64,
+    /// Unix seconds of the quote itself as reported by the feed - what "now"
+    /// means for this figure. Futures arrive delayed, so the UI shows this
+    /// time rather than implying the price is from this very second.
+    pub market_time: i64,
+}
+
 /// Numeric market data: correlations, GSR, templated Pine Scripts. No AI and
 /// no rate limit, so it is refreshed independently of per-instrument briefings.
 #[derive(Serialize, Deserialize, Clone, Debug)]

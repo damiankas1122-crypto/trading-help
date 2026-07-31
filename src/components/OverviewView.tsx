@@ -4,7 +4,7 @@ import { CitationsSection } from "./CitationsSection";
 import { LastSnapshotPreview } from "./LastSnapshotPreview";
 import { EmptyStateFirstRun } from "./EmptyStateFirstRun";
 import { Panel } from "./Panel";
-import { signedPct, formatUnixTimestamp } from "../utils/format";
+import { signedPct, formatUnixDateTime, formatCorrelation } from "../utils/format";
 import { instrumentDataFor, isMetal } from "../utils/instrumentData";
 
 function Kv({ label, value, className = "" }: { label: string; value: string; className?: string }) {
@@ -97,7 +97,7 @@ export function OverviewView({
         </div>
         {marketContext && (
           <p className="text-[11px] text-term-faint mt-2">
-            Dane rynkowe zaktualizowane: {formatUnixTimestamp(marketContext.timestamp)}
+            Dane rynkowe zaktualizowane: {formatUnixDateTime(marketContext.timestamp)}
           </p>
         )}
       </Panel>
@@ -128,7 +128,7 @@ export function OverviewView({
                 <Kv label="MACD sygnał" value={numeric.technicals.macd_signal.toFixed(2)} />
                 <Kv
                   label={numeric.correlatedWith ? `Korelacja z ${numeric.correlatedWith}` : "Korelacja"}
-                  value={numeric.correlation.toFixed(3)}
+                  value={formatCorrelation(numeric.correlation)}
                 />
                 <Kv label="Zmienność" value={numeric.volatility.toFixed(3)} />
                 {isMetal(instrument) && (
@@ -172,7 +172,7 @@ export function OverviewView({
             {marketContext.equity_reports.map((r) => (
               <div key={r.symbol}>
                 <span className="text-term-faint">{r.symbol}: </span>
-                <span>{r.correlation.toFixed(3)}</span>
+                <span>{formatCorrelation(r.correlation)}</span>
               </div>
             ))}
             <div>
@@ -181,7 +181,7 @@ export function OverviewView({
             </div>
             <div>
               <span className="text-term-faint">Au-Ag corr: </span>
-              <span>{marketContext.metals_report.correlation.toFixed(3)}</span>
+              <span>{formatCorrelation(marketContext.metals_report.correlation)}</span>
             </div>
           </div>
         </Panel>

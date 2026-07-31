@@ -27,6 +27,13 @@ pub enum CommandError {
     #[error("Brak danych do analizy indeksów")]
     NoStrongestPair,
 
+    /// A spawned quote task never returned - it panicked or was cancelled. Kept
+    /// apart from a fetch failure: the fault is inside the application, not at
+    /// the provider. Carries no payload because `JoinError` renders as a Rust
+    /// panic message, which belongs in the log and never in the UI.
+    #[error("Pobieranie notowań nie zostało dokończone. Szczegóły zapisano w logu.")]
+    LiveQuoteTaskFailed,
+
     #[error("Nieznany instrument: {0}")]
     UnknownInstrument(String),
 

@@ -97,6 +97,17 @@ fn is_valid_candle(open: f64, high: f64, low: f64, close: f64) -> bool {
     open.is_finite() && high.is_finite() && low.is_finite() && close.is_finite()
 }
 
+/// Ascending order enforced at the source, like the NaN filter above. The crate
+/// passes Yahoo's response order through verbatim (`quotes()` does not sort),
+/// while `.last()`, `[len-2]` and `windows(2)` all over the codebase - up to
+/// the `reference_price` persisted in tactics.json - assume newest-last. The
+/// 2026-07-30 probe showed the order is currently ascending; one sort makes
+/// that a property of this code instead of a property of Yahoo.
+fn sorted_by_time(mut history: Vec<MarketData>) -> Vec<MarketData> {
+    history.sort_by_key(|candle| candle.timestamp);
+    history
+}
+
 /// Runs after filtering, never before: the count that matters is how many
 /// candles survived. An empty or too-short series returned as `Ok` reaches the
 /// indicators, which answer with their defaults (price 0.0, RSI 50, MACD 0/0) -
@@ -116,7 +127,96 @@ fn validate_history(symbol: &str, history: Vec<MarketData>) -> Result<Vec<Market
     Ok(history)
 }
 
+/// Ceiling for one live-quote request. Lives out here because the crate's
+/// builder silently drops a configured timeout: `YahooConnectorBuilder::build()`
+/// (2.4.0) ignores its inner `ClientBuilder` and constructs a fresh client.
+const LIVE_QUOTE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Ceiling for a 90-day history request - the same crate limitation as above,
+/// so the same technique. Generous against the observed 1-3 s so a slow market
+/// day never trips it; without any ceiling a hung connection froze market
+/// context, briefing and tactic alike for as long as the OS kept the socket.
+const HISTORY_FETCH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Shared connector for live quotes, built once. The 90-day history path keeps
+/// its own per-call connector for now (CR-13 covers unifying that separately).
+fn live_connector() -> Option<&'static yf::YahooConnector> {
+    static CONNECTOR: OnceLock<Option<yf::YahooConnector>> = OnceLock::new();
+    CONNECTOR.get_or_init(|| yf::YahooConnector::new().ok()).as_ref()
+}
+
+/// Pure assembly of a quote, so the validity rules are testable. `None` for a
+/// non-positive or non-finite figure: rendering such a value would be
+/// indistinguishable from a real reading (the A-01 rule, applied to quotes).
+/// The previous close is held to the same bar because the daily change is
+/// derived from it - a garbage denominator makes a confident-looking percent.
+fn build_live_quote(
+    instrument: &str,
+    price: f64,
+    previous_close: f64,
+    market_time: i64,
+) -> Option<crate::models::LiveQuote> {
+    let valid = |value: f64| value.is_finite() && value > 0.0;
+    if !valid(price) || !valid(previous_close) {
+        return None;
+    }
+    Some(crate::models::LiveQuote {
+        instrument: instrument.to_string(),
+        price,
+        previous_close,
+        daily_change_pct: (price - previous_close) / previous_close * 100.0,
+        market_time,
+    })
+}
+
+/// Current quote from chart metadata (`regularMarketPrice`): a single-candle
+/// range query, no history, and deliberately no cache - the candle cache exists
+/// to protect the 90-day fetch, while this call is the one thing that must not
+/// be five minutes old.
+pub async fn fetch_live_quote(instrument: &str, symbol: &str) -> Result<crate::models::LiveQuote, MarketDataError> {
+    let connector = live_connector().ok_or_else(|| MarketDataError::Fetch {
+        symbol: symbol.to_string(),
+        message: "nie udało się zainicjalizować klienta HTTP".to_string(),
+    })?;
+
+    let response = tokio::time::timeout(LIVE_QUOTE_TIMEOUT, connector.get_quote_range(symbol, "1d", "1d"))
+        .await
+        .map_err(|_| MarketDataError::Fetch {
+            symbol: symbol.to_string(),
+            message: format!("przekroczono czas oczekiwania ({} s)", LIVE_QUOTE_TIMEOUT.as_secs()),
+        })?
+        .map_err(|e| MarketDataError::Fetch {
+            symbol: symbol.to_string(),
+            message: e.to_string(),
+        })?;
+
+    let meta = response.metadata().map_err(|e| MarketDataError::Fetch {
+        symbol: symbol.to_string(),
+        message: e.to_string(),
+    })?;
+
+    build_live_quote(
+        instrument,
+        meta.regular_market_price,
+        meta.chart_previous_close,
+        meta.regular_market_time as i64,
+    )
+    .ok_or(MarketDataError::NoData { symbol: symbol.to_string() })
+}
+
 pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, MarketDataError> {
+    let result = fetch_market_data_inner(symbol).await;
+    // The log file is the only place a field failure remains visible after the
+    // fact: the UI banner gets dismissed, and remote diagnosis of the
+    // 2026-07-30 "stale prices" report failed precisely because market errors
+    // never reached the log.
+    if let Err(e) = &result {
+        log::warn!("Market data fetch failed for {symbol}: {e}");
+    }
+    result
+}
+
+async fn fetch_market_data_inner(symbol: &str) -> Result<Vec<MarketData>, MarketDataError> {
     if let Some(hit) = cached(symbol) {
         return Ok(hit);
     }
@@ -131,13 +231,19 @@ pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, MarketDa
     let end = OffsetDateTime::now_utc();
     let start = end - Duration::days(90);
 
-    let response = provider
-        .get_quote_history(symbol, start, end)
-        .await
-        .map_err(|e| MarketDataError::Fetch {
-            symbol: symbol.to_string(),
-            message: e.to_string(),
-        })?;
+    let response = tokio::time::timeout(
+        HISTORY_FETCH_TIMEOUT,
+        provider.get_quote_history(symbol, start, end),
+    )
+    .await
+    .map_err(|_| MarketDataError::Fetch {
+        symbol: symbol.to_string(),
+        message: format!("przekroczono czas oczekiwania ({} s)", HISTORY_FETCH_TIMEOUT.as_secs()),
+    })?
+    .map_err(|e| MarketDataError::Fetch {
+        symbol: symbol.to_string(),
+        message: e.to_string(),
+    })?;
 
     let quotes = response.quotes().map_err(|e| MarketDataError::Fetch {
         symbol: symbol.to_string(),
@@ -166,7 +272,7 @@ pub async fn fetch_market_data(symbol: &str) -> Result<Vec<MarketData>, MarketDa
 
     // Validation precedes caching, so a bad response cannot be frozen in for the
     // whole TTL with no way to refresh it.
-    let history = validate_history(symbol, history)?;
+    let history = validate_history(symbol, sorted_by_time(history))?;
     store_in_cache(symbol, &history);
     Ok(history)
 }
@@ -280,6 +386,63 @@ mod tests {
         assert_eq!(cache.len(), MAX_CACHE_ENTRIES);
         assert!(!cache.contains_key("SYM0"), "najstarszy wpis powinien wypaść");
         assert!(cache.contains_key("OVERFLOW"));
+    }
+
+    fn candle_at(timestamp: i64, close: f64) -> MarketData {
+        MarketData {
+            symbol: "TEST".to_string(),
+            time: timestamp.to_string(),
+            timestamp,
+            open: close,
+            high: close,
+            low: close,
+            close,
+        }
+    }
+
+    #[test]
+    fn history_is_sorted_ascending_whatever_order_the_source_used() {
+        let descending = vec![candle_at(300, 3.0), candle_at(200, 2.0), candle_at(100, 1.0)];
+        let shuffled = vec![candle_at(200, 2.0), candle_at(300, 3.0), candle_at(100, 1.0)];
+
+        for input in [descending, shuffled] {
+            let sorted = sorted_by_time(input);
+            let timestamps: Vec<i64> = sorted.iter().map(|c| c.timestamp).collect();
+            assert_eq!(timestamps, vec![100, 200, 300]);
+            // The newest close is what .last() serves to every consumer.
+            assert_eq!(sorted.last().unwrap().close, 3.0);
+        }
+    }
+
+    #[test]
+    fn already_ascending_history_is_left_unchanged() {
+        let ascending = vec![candle_at(100, 1.0), candle_at(200, 2.0), candle_at(300, 3.0)];
+        let sorted = sorted_by_time(ascending.clone());
+        let expected: Vec<i64> = ascending.iter().map(|c| c.timestamp).collect();
+        assert_eq!(sorted.iter().map(|c| c.timestamp).collect::<Vec<_>>(), expected);
+    }
+
+    #[test]
+    fn live_quote_carries_price_change_and_time() {
+        let quote = build_live_quote("GOLD", 4156.0, 4100.0, 1_785_400_000).expect("poprawne dane");
+        assert_eq!(quote.instrument, "GOLD");
+        assert_eq!(quote.price, 4156.0);
+        assert_eq!(quote.market_time, 1_785_400_000);
+        assert!((quote.daily_change_pct - (56.0 / 4100.0 * 100.0)).abs() < 1e-9);
+    }
+
+    #[test]
+    fn live_quote_rejects_unusable_prices() {
+        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY] {
+            assert!(build_live_quote("GOLD", bad, 4100.0, 0).is_none(), "cena {bad} przeszła");
+            assert!(build_live_quote("GOLD", 4156.0, bad, 0).is_none(), "poprzednie zamknięcie {bad} przeszło");
+        }
+    }
+
+    #[test]
+    fn live_quote_change_sign_follows_direction() {
+        assert!(build_live_quote("X", 110.0, 100.0, 0).unwrap().daily_change_pct > 0.0);
+        assert!(build_live_quote("X", 90.0, 100.0, 0).unwrap().daily_change_pct < 0.0);
     }
 
     #[test]

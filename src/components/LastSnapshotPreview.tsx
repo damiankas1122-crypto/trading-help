@@ -1,5 +1,6 @@
 import type { Snapshot } from "../types";
 import { Panel } from "./Panel";
+import { formatCorrelation, formatUnixDateTime } from "../utils/format";
 
 /** Shows the last stored reading, if any, instead of an empty screen. */
 export function LastSnapshotPreview({ snapshot, onRefresh }: { snapshot: Snapshot; onRefresh: () => void }) {
@@ -15,11 +16,15 @@ export function LastSnapshotPreview({ snapshot, onRefresh }: { snapshot: Snapsho
         </button>
       }
     >
+      <p className="text-term-amber text-xs font-mono mb-3">
+        Dane archiwalne, zapisane {formatUnixDateTime(snapshot.timestamp)} — nie odzwierciedlają
+        bieżącego rynku.
+      </p>
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-xs font-mono text-term-faint">
         {snapshot.equity_reports.map((r) => (
           <div key={r.symbol}>
             <span>{r.symbol}: </span>
-            <span className="text-term-dim">{r.correlation.toFixed(3)}</span>
+            <span className="text-term-dim">{formatCorrelation(r.correlation)}</span>
           </div>
         ))}
         <div>

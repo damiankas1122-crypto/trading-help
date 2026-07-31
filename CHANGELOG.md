@@ -4,26 +4,61 @@ All notable changes to Trading Help are documented here.
 
 ## [Unreleased]
 
-### Changed
-- Correlation is now joined on trading dates instead of series length; pairs with
-  different session calendars no longer correlate returns from different days (A-03).
-- `correlation` is `Option<f64>` across the model: zero is a measurement result and
-  no longer doubles as "not measured".
-- Reports carry `overlapping_observations` — the number of shared sessions a
-  coefficient was computed from.
-- Prompt context omits correlation entirely when unmeasured, rather than passing a
-  placeholder the model would comment on.
+## [0.4.4] - 2026-07-31
+
+Prices refresh on their own, and anything that is not current now says how old
+it is.
+
+### Added
+- Prices in the ticker refresh every 60 seconds on their own. The tape states the
+  time carried by the quote itself, not the time you happen to be looking at it —
+  futures reach the provider with a delay, so that is the only honest "as of"
+- Market data (correlations, indicators, Gold/Silver Ratio) refreshes on its own
+  every 5 minutes. Until now it was fetched once at startup and then only when you
+  pressed the button, so an app left open all day kept showing morning prices
+- The correlation builder states how many shared trading sessions a coefficient
+  was computed from
 
 ### Fixed
+- Stored data shown when live data is unavailable is now marked as archival, with
+  the date and time it was saved. Previously it was indistinguishable from current
+  data — the reason a price from an earlier session could pass for today's. The
+  marker appears only after a download has actually failed, so it no longer
+  flashes for a moment on every healthy start
+- Every time shown on screen now carries a date, not just an hour. A bare "09:12"
+  hid the age of anything older than today
+- A hung connection to the price provider no longer freezes market data, briefings
+  and tactic generation for as long as the system keeps the connection open; these
+  requests now have a time limit
+- Price candles are ordered by time as they arrive, so a change in the provider's
+  ordering cannot quietly reverse the indicators or the price on screen
+- Failures to download market data are now written to the log file. A report about
+  wrong or stale prices can now be diagnosed from the log instead of guesswork
+- In the correlation builder, editing a ticker field after computing no longer
+  relabels the result already on screen with the new symbol
+- Pressing "Odśwież dane rynkowe" twice in quick succession no longer starts two
+  overlapping downloads
 - `to_returns` dropped observations instead of marking gaps, silently shifting every
-  later return by one session. Removed.
-- `find_strongest_equity_pair` excludes unmeasured and non-finite correlations from
-  the ranking instead of ordering them last.
+  later return by one session. Removed
+- The strongest correlated pair is chosen among measured pairs only, instead of
+  ranking unmeasured and non-finite ones last
+
+### Changed
+- Correlation is joined on trading dates instead of series length; pairs with
+  different session calendars no longer correlate returns from different days
+- A correlation that could not be measured is shown as "—" instead of 0.000, and
+  is left out of the AI prompt entirely rather than passed as a placeholder the
+  model would comment on
+- Internal: a round of price updates in which not a single request completed now
+  reports a failure instead of an empty success. Nothing looks different today,
+  but the app no longer mistakes "nothing came back" for "nothing to update"
+- Release builds install dependencies from the lockfile (`npm ci`), so a published
+  binary contains the versions that were tested
 
 ### Known issue
 - `get_market_context` still fails wholesale when no equity pair has a measured
   correlation (`NoStrongestPair`); the Pine correlation script needs to become
-  optional. Frontend does not yet know about the changed contract — not releasable.
+  optional
 
 ## [0.4.3] - 2026-07-29
 

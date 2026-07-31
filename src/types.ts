@@ -5,8 +5,12 @@ export type TechnicalIndicators = {
 };
 
 export type AnalyticalReport = {
+  /** Stable record id in the form "LEADER->FOLLOWER", also when correlation is null. */
   symbol: string;
-  correlation: number;
+  /** null = not measured (too few shared sessions); 0 is a real reading. */
+  correlation: number | null;
+  /** Shared session days behind the correlation; 0 in records saved before measurement. */
+  overlapping_observations: number;
   volatility: number;
   technicals: TechnicalIndicators;
   latest_close: number;
@@ -15,7 +19,10 @@ export type AnalyticalReport = {
 };
 
 export type PreciousMetalsReport = {
-  correlation: number;
+  /** null = not measured (too few shared sessions); 0 is a real reading. */
+  correlation: number | null;
+  /** Shared session days behind the correlation; 0 in records saved before measurement. */
+  overlapping_observations: number;
   current_gsr: number;
   gsr_30d_ago: number;
   gsr_change_pct: number;
@@ -82,6 +89,16 @@ export type Snapshot = {
   equity_reports: AnalyticalReport[];
   metals_report: PreciousMetalsReport;
   timestamp: string;
+};
+
+export type LiveQuote = {
+  /** Catalogue id, not a Yahoo symbol. */
+  instrument: string;
+  price: number;
+  previous_close: number;
+  daily_change_pct: number;
+  /** Unix seconds of the quote itself as reported by the feed. */
+  market_time: number;
 };
 
 export type UpdateStatus = "idle" | "available" | "downloading" | "ready" | "error";

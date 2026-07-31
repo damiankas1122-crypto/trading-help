@@ -1,7 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
-import type { MarketContext, Snapshot, ViewId, TradingTactic, InstrumentBriefing } from "./types";
+import type {
+  LiveQuote,
+  MarketContext,
+  Snapshot,
+  ViewId,
+  TradingTactic,
+  InstrumentBriefing,
+} from "./types";
 import { INSTRUMENTS } from "./constants";
 import { useAppUpdater } from "./hooks/useAppUpdater";
 import { formatErrorMessage } from "./utils/format";
@@ -17,6 +24,13 @@ import { SettingsView } from "./components/SettingsView";
 import { DisclaimerFooter } from "./components/DisclaimerFooter";
 import { ApiKeyOnboarding } from "./components/ApiKeyOnboarding";
 import { UpdateBanner } from "./components/UpdateBanner";
+
+// Quotes are one light request per instrument, so a short cadence is cheap;
+// the analytical context (candles, correlations, snapshot write) is heavier and
+// its backend candle cache has a 5-minute TTL, so refreshing it faster than
+// that would only re-serve the cache.
+const LIVE_QUOTES_INTERVAL_MS = 60_000;
+const MARKET_CONTEXT_REFRESH_MS = 5 * 60_000;
 
 function App() {
   const updater = useAppUpdater();
@@ -34,6 +48,16 @@ function App() {
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingError, setBriefingError] = useState<string | null>(null);
   const [briefingOperationId, setBriefingOperationId] = useState<string | null>(null);
+  const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
+  // Whether the first quote round has finished, whatever its outcome. The tape
+  // may not call anything "archival" before this: at startup the snapshot loads
+  // from disk long before the network answers, so the marker used to flash for
+  // a second on every healthy start - a warning nobody can read and that cries
+  // wolf. After the first round it means what it says: we asked and got nothing.
+  const [quotesSettled, setQuotesSettled] = useState(false);
+  // Ref, not state: the interval callback closes over a stale render, so an
+  // in-flight guard held in state would not be visible to it (CR-15).
+  const marketContextInFlight = useRef(false);
 
   useEffect(() => {
     invoke<Snapshot | null>("get_last_snapshot")
@@ -50,6 +74,8 @@ function App() {
   // Market data comes from Yahoo Finance with no rate limit, so it refreshes
   // automatically and independently of the AI briefing.
   const refreshMarketContext = async () => {
+    if (marketContextInFlight.current) return;
+    marketContextInFlight.current = true;
     setMarketContextRefreshing(true);
     try {
       const result = await invoke<MarketContext>("get_market_context");
@@ -61,13 +87,43 @@ function App() {
       // OverviewView renders an error banner alongside it.
       setMarketContextError(formatErrorMessage(err));
     } finally {
+      marketContextInFlight.current = false;
       setMarketContextRefreshing(false);
     }
   };
 
   useEffect(() => {
     refreshMarketContext();
+    const interval = setInterval(refreshMarketContext, MARKET_CONTEXT_REFRESH_MS);
+    return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Live quotes on their own short cadence. A failed round keeps the previous
+  // values on screen; their visible "as of" time is what explains the gap.
+  useEffect(() => {
+    let cancelled = false;
+    const tick = () => {
+      invoke<LiveQuote[]>("get_live_quotes", { instruments: INSTRUMENTS })
+        .then((quotes) => {
+          if (cancelled || quotes.length === 0) return;
+          setLiveQuotes((prev) => {
+            const next = { ...prev };
+            for (const quote of quotes) next[quote.instrument] = quote;
+            return next;
+          });
+        })
+        .catch((err) => console.warn("Live quotes failed:", err))
+        .finally(() => {
+          if (!cancelled) setQuotesSettled(true);
+        });
+    };
+    tick();
+    const interval = setInterval(tick, LIVE_QUOTES_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, []);
 
   const runInstrumentBriefing = async (instrument: string) => {
@@ -106,6 +162,9 @@ function App() {
       <TickerTape
         equityReports={marketContext?.equity_reports ?? lastSnapshot?.equity_reports ?? null}
         metalsReport={marketContext?.metals_report ?? lastSnapshot?.metals_report ?? null}
+        liveQuotes={liveQuotes}
+        quotesSettled={quotesSettled}
+        archivalTimestamp={!marketContext && lastSnapshot ? lastSnapshot.timestamp : null}
       />
 
       <header className="h-14 shrink-0 border-b border-term-line flex items-center gap-4 px-4 bg-term-panel">

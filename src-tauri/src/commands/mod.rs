@@ -14,6 +14,7 @@ mod custom_pair;
 mod tactics;
 mod market_context;
 mod instrument_briefing;
+mod live_quotes;
 pub use error::CommandError;
 
 #[tauri::command]
@@ -33,6 +34,13 @@ pub async fn get_precious_metals_analysis() -> Result<models::PreciousMetalsRepo
 #[tauri::command]
 pub async fn get_custom_pair_correlation(ticker_a: String, ticker_b: String) -> Result<models::AnalyticalReport, String> {
     custom_pair::get_custom_pair_correlation_inner(ticker_a, ticker_b)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_live_quotes(instruments: Vec<String>) -> Result<Vec<models::LiveQuote>, String> {
+    live_quotes::get_live_quotes_inner(instruments)
         .await
         .map_err(|e| e.to_string())
 }

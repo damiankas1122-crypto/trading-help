@@ -68,34 +68,52 @@ export function CorrelationBuilderView() {
         {error && <p className="text-xs text-term-red font-mono mt-3">{error}</p>}
       </Panel>
 
-      {result && (
+      {result && (() => {
+        // Labels come from the result, not from the live inputs: editing the
+        // form after computing must not relabel numbers that belong to the
+        // previous pair. The symbol has the form "A->B".
+        const baseTicker = result.symbol.split("->")[0] ?? result.symbol;
+        return (
         <Panel title={result.symbol}>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono">
             <div>
               <span className="block text-term-faint uppercase tracking-wide">Korelacja pary</span>
-              <span className="text-term-text font-semibold tabular-nums">{result.correlation.toFixed(4)}</span>
+              <span className="text-term-text font-semibold tabular-nums">
+                {result.correlation === null ? "—" : result.correlation.toFixed(4)}
+              </span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">Zmienność {tickerA.trim()}</span>
+              <span className="block text-term-faint uppercase tracking-wide">Wspólne sesje</span>
+              <span className="text-term-text font-semibold tabular-nums">{result.overlapping_observations}</span>
+            </div>
+            <div>
+              <span className="block text-term-faint uppercase tracking-wide">Zmienność {baseTicker}</span>
               <span className="text-term-text font-semibold tabular-nums">{result.volatility.toFixed(4)}</span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">RSI (14) {tickerA.trim()}</span>
+              <span className="block text-term-faint uppercase tracking-wide">RSI (14) {baseTicker}</span>
               <span className="text-term-text font-semibold tabular-nums">{result.technicals.rsi.toFixed(2)}</span>
             </div>
             <div>
-              <span className="block text-term-faint uppercase tracking-wide">MACD {tickerA.trim()}</span>
+              <span className="block text-term-faint uppercase tracking-wide">MACD {baseTicker}</span>
               <span className="text-term-text font-semibold tabular-nums">
                 {result.technicals.macd_line.toFixed(4)} (sygnał {result.technicals.macd_signal.toFixed(4)})
               </span>
             </div>
           </div>
+          {result.correlation === null && (
+            <p className="text-[11px] text-term-amber mt-3">
+              Korelacji nie zmierzono — te dwa instrumenty mają za mało wspólnych sesji w oknie
+              90 dni ({result.overlapping_observations}).
+            </p>
+          )}
           <p className="text-[11px] text-term-faint mt-3">
             Korelacja dotyczy obu tickerów. Pozostałe wskaźniki liczone są wyłącznie dla{" "}
-            {tickerA.trim()} — drugi ticker wchodzi tylko do korelacji.
+            {baseTicker} — drugi ticker wchodzi tylko do korelacji.
           </p>
         </Panel>
-      )}
+        );
+      })()}
     </div>
   );
 }
