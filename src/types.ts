@@ -78,8 +78,8 @@ export type TacticTrackRecord = {
 export type MarketContext = {
   equity_reports: AnalyticalReport[];
   metals_report: PreciousMetalsReport;
-  pine_script_correlation: string;
-  pine_script_correlation_explanation: string;
+  pine_script_correlation: string | null;
+  pine_script_correlation_explanation: string | null;
   pine_script_gsr: string;
   pine_script_gsr_explanation: string;
   timestamp: string;

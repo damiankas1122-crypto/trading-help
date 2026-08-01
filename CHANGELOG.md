@@ -13,6 +13,10 @@ All notable changes to Trading Help are documented here.
 - The TradingView scripts for gold, silver and oil now chart the same contract the
   price is taken from. They pointed at spot feeds, so the chart showed a different
   instrument than the number displayed above it
+- Market data no longer disappears entirely when no pair of indices has a
+  measurable correlation. Prices, the Gold/Silver Ratio, metals, the ticker and the
+  saved snapshot all keep working; only the correlation script is left out, and the
+  Scripts tab says why instead of showing an empty frame
 
 ## [0.4.4] - 2026-07-31
 

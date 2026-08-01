@@ -20,6 +20,17 @@ export function ScriptsView({ marketContext }: { marketContext: MarketContext | 
     );
   }
 
+  // The backend emits the correlation script and its explanation together or
+  // leaves out both, so one nullable value stands for the whole section: a
+  // second check would imply a half-present state the backend cannot produce.
+  const correlationScript =
+    marketContext.pine_script_correlation === null
+      ? null
+      : {
+          code: marketContext.pine_script_correlation,
+          explanation: marketContext.pine_script_correlation_explanation!,
+        };
+
   return (
     <div className="space-y-3">
       <Panel title="Skrypty TradingView">
@@ -30,11 +41,21 @@ export function ScriptsView({ marketContext }: { marketContext: MarketContext | 
         </p>
       </Panel>
 
-      <PineScriptSection
-        title="Pine Script: Korelacja indeksów"
-        explanation={marketContext.pine_script_correlation_explanation}
-        code={marketContext.pine_script_correlation}
-      />
+      {correlationScript ? (
+        <PineScriptSection
+          title="Pine Script: Korelacja indeksów"
+          explanation={correlationScript.explanation}
+          code={correlationScript.code}
+        />
+      ) : (
+        <Panel title="Pine Script: Korelacja indeksów">
+          <p className="text-[11px] text-term-amber">
+            Korelacji nie zmierzono — żadna para indeksów nie miała dość wspólnych sesji w oknie
+            90 dni, więc skrypt korelacji nie powstał. To stan danych, nie błąd aplikacji;
+            pozostałe dane rynkowe i skrypt GSR są aktualne.
+          </p>
+        </Panel>
+      )}
       <PineScriptSection
         title="Pine Script: Gold/Silver Ratio"
         explanation={marketContext.pine_script_gsr_explanation}

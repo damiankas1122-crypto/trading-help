@@ -139,8 +139,15 @@ pub struct LiveQuote {
 pub struct MarketContext {
     pub equity_reports: Vec<AnalyticalReport>,
     pub metals_report: PreciousMetalsReport,
-    pub pine_script_correlation: String,
-    pub pine_script_correlation_explanation: String,
+    /// `None` when no equity pair had a measurable correlation. A missing pair
+    /// does not invalidate prices, GSR or metals, so the script is dropped and
+    /// the rest of the context still goes out.
+    ///
+    /// Set together with `pine_script_correlation_explanation` in
+    /// `market_context.rs`: a script without its explanation is never emitted,
+    /// and neither is an explanation of a script that does not exist.
+    pub pine_script_correlation: Option<String>,
+    pub pine_script_correlation_explanation: Option<String>,
     pub pine_script_gsr: String,
     pub pine_script_gsr_explanation: String,
     pub timestamp: String,

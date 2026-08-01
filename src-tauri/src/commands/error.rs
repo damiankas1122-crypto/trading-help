@@ -24,9 +24,6 @@ pub enum CommandError {
     #[error("Błąd magazynu kluczy systemu: {0}")]
     Keychain(String),
 
-    #[error("Brak danych do analizy indeksów")]
-    NoStrongestPair,
-
     /// A spawned quote task never returned - it panicked or was cancelled. Kept
     /// apart from a fetch failure: the fault is inside the application, not at
     /// the provider. Carries no payload because `JoinError` renders as a Rust
