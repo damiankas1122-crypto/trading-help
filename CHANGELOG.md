@@ -2,7 +2,7 @@
 
 All notable changes to Trading Help are documented here.
 
-## [Unreleased]
+## [0.4.5] - 2026-08-01
 
 ### Fixed
 - Gold, silver and oil now state outright that the price is a futures contract,
