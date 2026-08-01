@@ -1,4 +1,4 @@
-import type { AnalyticalReport, LiveQuote, PreciousMetalsReport } from "../types";
+import type { AnalyticalReport, InstrumentInfo, LiveQuote, PreciousMetalsReport } from "../types";
 import { INSTRUMENTS } from "../constants";
 import { signedPct, formatUnixDateTime } from "../utils/format";
 import { instrumentDataFor } from "../utils/instrumentData";
@@ -7,6 +7,7 @@ export function TickerTape({
   equityReports,
   metalsReport,
   liveQuotes,
+  instrumentInfo,
   quotesSettled,
   archivalTimestamp,
 }: {
@@ -14,6 +15,8 @@ export function TickerTape({
   metalsReport: PreciousMetalsReport | null;
   /** Keyed by instrument id; a missing key falls back to the analytical context. */
   liveQuotes: Record<string, LiveQuote>;
+  /** Keyed by instrument id; feeds the hover text explaining what the price is. */
+  instrumentInfo: Record<string, InstrumentInfo>;
   /** Whether the first quote round has finished, whatever its outcome. */
   quotesSettled: boolean;
   /** Set when the numbers below come from a stored snapshot, not a live fetch. */
@@ -33,8 +36,12 @@ export function TickerTape({
         const data = instrumentDataFor(instrument, equityReports, metalsReport);
         const price = live ? live.price : data?.price ?? null;
         const changePct = live ? live.daily_change_pct : data?.changePct ?? null;
+        const info = instrumentInfo[instrument] ?? null;
         return (
-          <span key={instrument}>
+          <span
+            key={instrument}
+            title={info ? `${info.label} — ${info.description} (${info.source})` : undefined}
+          >
             <span className="text-term-faint mr-2">{instrument}</span>
             {price !== null && changePct !== null ? (
               <>

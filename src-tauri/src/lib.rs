@@ -41,6 +41,7 @@ pub fn run() {
              commands::get_cross_market_analysis,
              commands::get_precious_metals_analysis,
              commands::get_custom_pair_correlation,
+             commands::get_instrument_catalog,
              commands::get_live_quotes,
              commands::get_market_context,
              commands::get_instrument_briefing,

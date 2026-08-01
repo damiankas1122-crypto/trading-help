@@ -1,4 +1,4 @@
-import type { MarketContext, Snapshot, InstrumentBriefing } from "../types";
+import type { MarketContext, Snapshot, InstrumentBriefing, InstrumentInfo } from "../types";
 import { PineScriptSection } from "./PineScriptSection";
 import { CitationsSection } from "./CitationsSection";
 import { LastSnapshotPreview } from "./LastSnapshotPreview";
@@ -23,6 +23,7 @@ export function OverviewView({
   marketContextRefreshing,
   lastSnapshot,
   onRefreshMarketContext,
+  instrumentInfo,
   instrumentBriefing,
   briefingLoading,
   briefingError,
@@ -35,6 +36,8 @@ export function OverviewView({
   marketContextRefreshing: boolean;
   lastSnapshot: Snapshot | null;
   onRefreshMarketContext: () => void;
+  /** What the focused instrument is; null until the catalogue arrives. */
+  instrumentInfo: InstrumentInfo | null;
   instrumentBriefing: InstrumentBriefing | null;
   briefingLoading: boolean;
   briefingError: string | null;
@@ -111,6 +114,15 @@ export function OverviewView({
       {marketContext && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <Panel title={`${instrument} // Dane liczbowe`}>
+            {instrumentInfo && (
+              // Sits above the numbers on purpose: a futures price read as a
+              // spot price is the difference between "wrong data" and "a
+              // different instrument than you were comparing against".
+              <p className="text-[11px] text-term-faint border-b border-dotted border-term-line pb-2 mb-2 leading-relaxed">
+                {instrumentInfo.description}
+                <span className="block text-term-dim mt-1">Źródło: {instrumentInfo.source}</span>
+              </p>
+            )}
             {numeric ? (
               <>
                 <Kv label="Cena" value={numeric.price.toFixed(2)} />

@@ -38,6 +38,12 @@ pub async fn get_custom_pair_correlation(ticker_a: String, ticker_b: String) -> 
         .map_err(|e| e.to_string())
 }
 
+/// Static catalogue data: no network, no failure mode worth reporting.
+#[tauri::command]
+pub fn get_instrument_catalog() -> Vec<models::InstrumentInfo> {
+    instruments::catalog_for_frontend()
+}
+
 #[tauri::command]
 pub async fn get_live_quotes(instruments: Vec<String>) -> Result<Vec<models::LiveQuote>, String> {
     live_quotes::get_live_quotes_inner(instruments)

@@ -56,9 +56,18 @@ static CATALOG: &[Instrument] = &[
     Instrument {
         id: "GOLD",
         label: "Złoto",
-        description: "Kontrakt terminowy na złoto notowany na COMEX.",
+        // Says "futures" outright: the quote sits above the spot price by the
+        // cost of carry, and Yahoo's GC=F tracks the most actively traded month
+        // rather than the nearest one - measured 2026-07-31 at 1.6% above the
+        // August contract. Without this line the number looks simply wrong next
+        // to any popular gold quote.
+        description: "Kontrakt terminowy na złoto (COMEX). To NIE jest cena spot \
+                      - kontrakt jest zwykle notowany wyżej o koszt finansowania, \
+                      a notowany miesiąc bywa odległy, więc różnica sięga 1-2%.",
         yahoo_symbol: "GC=F",
-        tv_ticker: "TVC:GOLD",
+        // Futures, matching the price source. Previously TVC:GOLD, which is spot
+        // - the app quoted one instrument and charted another.
+        tv_ticker: "COMEX:GC1!",
         class: InstrumentClass::Metal,
         benchmark_id: Some("SILVER"),
         news_symbol: Some("GLD"),
@@ -67,9 +76,11 @@ static CATALOG: &[Instrument] = &[
     Instrument {
         id: "SILVER",
         label: "Srebro",
-        description: "Kontrakt terminowy na srebro notowany na COMEX.",
+        description: "Kontrakt terminowy na srebro (COMEX). To NIE jest cena spot \
+                      - kontrakt jest zwykle notowany wyżej o koszt finansowania.",
         yahoo_symbol: "SI=F",
-        tv_ticker: "TVC:SILVER",
+        // Futures, matching the price source (was TVC:SILVER, i.e. spot).
+        tv_ticker: "COMEX:SI1!",
         class: InstrumentClass::Metal,
         benchmark_id: Some("GOLD"),
         news_symbol: Some("SLV"),
@@ -263,9 +274,11 @@ static CATALOG: &[Instrument] = &[
     Instrument {
         id: "OIL",
         label: "Ropa WTI",
-        description: "Kontrakt terminowy na ropę naftową WTI.",
+        description: "Kontrakt terminowy na ropę naftową WTI (NYMEX). To NIE jest \
+                      cena spot - notowanie dotyczy konkretnego miesiąca dostawy.",
         yahoo_symbol: "CL=F",
-        tv_ticker: "TVC:USOIL",
+        // Futures, matching the price source (was TVC:USOIL, i.e. spot).
+        tv_ticker: "NYMEX:CL1!",
         class: InstrumentClass::Macro,
         benchmark_id: Some("SP500"),
         news_symbol: None,
@@ -405,6 +418,41 @@ mod tests {
     fn every_instrument_has_a_description() {
         for instrument in all() {
             assert!(!instrument.description.is_empty(), "{} bez opisu", instrument.id);
+        }
+    }
+
+    #[test]
+    fn futures_say_they_are_not_spot() {
+        // A futures quote sits above spot, so a screen that does not say so
+        // reads as a wrong price next to any popular quote. The catalogue is
+        // the only place that knows, which makes it the place that must tell.
+        for id in ["GOLD", "SILVER", "OIL"] {
+            let entry = find(id).expect("instrument w katalogu");
+            assert!(
+                entry.yahoo_symbol.ends_with("=F"),
+                "{id} przestał być kontraktem terminowym - zweryfikuj opis"
+            );
+            assert!(
+                entry.description.contains("NIE jest cena spot"),
+                "{id}: opis nie ostrzega, że to nie cena spot: {}",
+                entry.description
+            );
+        }
+    }
+
+    #[test]
+    fn a_futures_instrument_is_never_charted_as_spot() {
+        // TVC:* symbols are TradingView's spot feeds; pairing one with a "=F"
+        // price source means quoting one instrument and charting another.
+        for instrument in all() {
+            if instrument.yahoo_symbol.ends_with("=F") {
+                assert!(
+                    !instrument.tv_ticker.starts_with("TVC:"),
+                    "{} pobiera futures, a rysuje spot ({})",
+                    instrument.id,
+                    instrument.tv_ticker
+                );
+            }
         }
     }
 

@@ -91,6 +91,15 @@ export type Snapshot = {
   timestamp: string;
 };
 
+export type InstrumentInfo = {
+  id: string;
+  label: string;
+  /** What the instrument is, in Polish - states outright when it is not spot. */
+  description: string;
+  /** Provider and symbol, e.g. "Yahoo Finance: GC=F". */
+  source: string;
+};
+
 export type LiveQuote = {
   /** Catalogue id, not a Yahoo symbol. */
   instrument: string;

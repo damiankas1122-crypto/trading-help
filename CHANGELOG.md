@@ -4,6 +4,16 @@ All notable changes to Trading Help are documented here.
 
 ## [Unreleased]
 
+### Fixed
+- Gold, silver and oil now state outright that the price is a futures contract,
+  not a spot price, and name the symbol it comes from — above the numbers in the
+  instrument panel and on hover in the ticker. A futures quote sits above spot by
+  the cost of carry (1.6% for gold when measured on 31 July), so next to any
+  popular gold quote the figure read as simply wrong
+- The TradingView scripts for gold, silver and oil now chart the same contract the
+  price is taken from. They pointed at spot feeds, so the chart showed a different
+  instrument than the number displayed above it
+
 ## [0.4.4] - 2026-07-31
 
 Prices refresh on their own, and anything that is not current now says how old

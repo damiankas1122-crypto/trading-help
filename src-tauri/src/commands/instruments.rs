@@ -3,6 +3,22 @@
 //! "which Yahoo symbol?") and should not carry catalogue rows around.
 
 use crate::catalog::{self, InstrumentClass};
+use crate::models::InstrumentInfo;
+
+/// The catalogue as the frontend may state it. Built here rather than mirrored
+/// in TypeScript: a second hand-written copy of the instrument list is exactly
+/// the duplication the Rust side was unified to remove.
+pub(crate) fn catalog_for_frontend() -> Vec<InstrumentInfo> {
+    catalog::all()
+        .iter()
+        .map(|entry| InstrumentInfo {
+            id: entry.id.to_string(),
+            label: entry.label.to_string(),
+            description: entry.description.to_string(),
+            source: format!("Yahoo Finance: {}", entry.yahoo_symbol),
+        })
+        .collect()
+}
 
 pub(crate) fn is_supported(instrument: &str) -> bool {
     catalog::find(instrument).is_some()

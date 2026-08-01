@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./App.css";
 import type {
+  InstrumentInfo,
   LiveQuote,
   MarketContext,
   Snapshot,
@@ -49,6 +50,7 @@ function App() {
   const [briefingError, setBriefingError] = useState<string | null>(null);
   const [briefingOperationId, setBriefingOperationId] = useState<string | null>(null);
   const [liveQuotes, setLiveQuotes] = useState<Record<string, LiveQuote>>({});
+  const [instrumentInfo, setInstrumentInfo] = useState<Record<string, InstrumentInfo>>({});
   // Whether the first quote round has finished, whatever its outcome. The tape
   // may not call anything "archival" before this: at startup the snapshot loads
   // from disk long before the network answers, so the marker used to flash for
@@ -69,6 +71,16 @@ function App() {
     invoke<boolean>("has_gemini_api_key")
       .then(setHasApiKey)
       .catch(() => setHasApiKey(false));
+  }, []);
+
+  // Static catalogue: fetched once, never refreshed. Says what each instrument
+  // actually is, so a futures price is not read as a spot price.
+  useEffect(() => {
+    invoke<InstrumentInfo[]>("get_instrument_catalog")
+      .then((entries) =>
+        setInstrumentInfo(Object.fromEntries(entries.map((entry) => [entry.id, entry])))
+      )
+      .catch((err) => console.warn("Instrument catalogue unavailable:", err));
   }, []);
 
   // Market data comes from Yahoo Finance with no rate limit, so it refreshes
@@ -163,6 +175,7 @@ function App() {
         equityReports={marketContext?.equity_reports ?? lastSnapshot?.equity_reports ?? null}
         metalsReport={marketContext?.metals_report ?? lastSnapshot?.metals_report ?? null}
         liveQuotes={liveQuotes}
+        instrumentInfo={instrumentInfo}
         quotesSettled={quotesSettled}
         archivalTimestamp={!marketContext && lastSnapshot ? lastSnapshot.timestamp : null}
       />
@@ -198,6 +211,7 @@ function App() {
               marketContextRefreshing={marketContextRefreshing}
               lastSnapshot={lastSnapshot}
               onRefreshMarketContext={refreshMarketContext}
+              instrumentInfo={instrumentInfo[focusedInstrument] ?? null}
               instrumentBriefing={instrumentBriefings[focusedInstrument] ?? null}
               briefingLoading={briefingLoading}
               briefingError={briefingError}

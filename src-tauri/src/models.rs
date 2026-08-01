@@ -101,6 +101,22 @@ pub struct Snapshot {
     pub timestamp: String,
 }
 
+/// What an instrument actually is, in the user's language. Carries only what
+/// the UI may state out loud - the fetch details stay in `catalog::Instrument`.
+///
+/// Exists because a price with no idea of what it measures misleads: gold from
+/// `GC=F` is a COMEX future quoted above spot, so next to any popular gold
+/// quote it reads as simply wrong unless the screen says what it is.
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct InstrumentInfo {
+    pub id: String,
+    pub label: String,
+    pub description: String,
+    /// Provider and symbol, e.g. "Yahoo Finance: GC=F" - so a figure that
+    /// differs from another service is explainable instead of suspicious.
+    pub source: String,
+}
+
 /// Current quote taken from chart metadata: one light request, no candles.
 /// Feeds the ticker tape on a short interval, independently of the heavy
 /// analytical context (which stays on its own 5-minute cadence).

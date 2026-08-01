@@ -323,9 +323,12 @@ mod pine_variant_tests {
     }
 
     #[test]
-    fn gold_and_silver_use_dedicated_tickers() {
-        assert_eq!(label_to_tv_ticker("GOLD"), Some("TVC:GOLD"));
-        assert_eq!(label_to_tv_ticker("SILVER"), Some("TVC:SILVER"));
+    fn metals_chart_the_same_instrument_the_price_comes_from() {
+        // Futures, not spot: the app quotes GC=F/SI=F, so a TVC:GOLD (spot)
+        // chart handed the user a different instrument than the number above it.
+        assert_eq!(label_to_tv_ticker("GOLD"), Some("COMEX:GC1!"));
+        assert_eq!(label_to_tv_ticker("SILVER"), Some("COMEX:SI1!"));
+        assert_eq!(label_to_tv_ticker("OIL"), Some("NYMEX:CL1!"));
     }
 
     #[test]
