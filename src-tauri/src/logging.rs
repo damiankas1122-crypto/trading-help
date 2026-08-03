@@ -54,18 +54,28 @@ const SECRET_VALUE_MARKERS: &[&str] = &[
 
 const REDACTED: &str = "[REDACTED]";
 
-/// Length of a Finnhub API token.
-const BARE_TOKEN_LEN: usize = 40;
-
-/// A Finnhub token carries no distinctive prefix - it is 40 alphanumeric
-/// characters, so `token=` is the only thing that normally gives it away. This
-/// catches the case where one reaches the log bare, without its parameter name.
+/// Length range of a bare API token. Finnhub issues 20 characters; the upper
+/// bound leaves room for a longer-token provider without another edit here.
 ///
-/// Redacting every 40-character run would also swallow git commit hashes, which
-/// are exactly that length; requiring a letter outside the hex alphabet excludes
+/// This was a single constant equal to 40, which is the number that had been
+/// assumed for Finnhub rather than measured against an issued token. A 20
+/// character token therefore passed the scrubber untouched. A range is used now
+/// because the exact length is a provider's choice and can change without notice.
+const BARE_TOKEN_MIN_LEN: usize = 20;
+const BARE_TOKEN_MAX_LEN: usize = 40;
+
+/// A Finnhub token carries no distinctive prefix, so `token=` is the only thing
+/// that normally gives it away. This catches the case where one reaches the log
+/// bare, without its parameter name.
+///
+/// Redacting every long alphanumeric run would also swallow git commit hashes,
+/// full or abbreviated; requiring a letter outside the hex alphabet excludes
 /// them, since a hash can never contain one.
 fn looks_like_bare_api_token(candidate: &str) -> bool {
-    candidate.len() == BARE_TOKEN_LEN
+    // Byte length equals character count only once every character is known to
+    // be ASCII, which the `all` below establishes; a multi-byte run whose byte
+    // length lands in range still fails there, so it cannot be redacted by luck.
+    (BARE_TOKEN_MIN_LEN..=BARE_TOKEN_MAX_LEN).contains(&candidate.len())
         && candidate.chars().all(|c| c.is_ascii_alphanumeric())
         && candidate.chars().any(|c| c.is_ascii_digit())
         && candidate.chars().any(|c| c.is_ascii_alphabetic() && !c.is_ascii_hexdigit())
@@ -363,15 +373,21 @@ mod scrub_tests {
         format!("{}{}", "sk-", "0".repeat(24))
     }
 
-    /// 40 alphanumeric characters, the Finnhub shape, with a non-hex letter so
-    /// it is distinguishable from a commit hash.
+    /// The issued Finnhub shape: 20 alphanumeric characters, with a non-hex
+    /// letter so it stays distinguishable from a commit hash.
     fn fake_finnhub_token() -> String {
+        format!("{}{}", "z1", "0".repeat(18))
+    }
+
+    /// Upper end of the accepted range, for a provider issuing longer tokens.
+    fn fake_long_provider_token() -> String {
         format!("{}{}", "z1", "0".repeat(38))
     }
 
     #[test]
     fn a_bare_token_is_removed_even_without_its_parameter_name() {
         let token = fake_finnhub_token();
+        assert_eq!(token.len(), BARE_TOKEN_MIN_LEN);
         let scrubbed = scrub(&format!("Finnhub call rejected for {token} at 12:00"));
         assert!(!scrubbed.contains(&token), "goły token przeszedł do logu");
         assert!(scrubbed.contains(REDACTED));
@@ -379,11 +395,33 @@ mod scrub_tests {
     }
 
     #[test]
+    fn a_bare_token_at_the_top_of_the_range_is_removed() {
+        let token = fake_long_provider_token();
+        assert_eq!(token.len(), BARE_TOKEN_MAX_LEN);
+        let scrubbed = scrub(&format!("call rejected for {token} at 12:00"));
+        assert!(!scrubbed.contains(&token), "długi goły token przeszedł do logu");
+        assert!(scrubbed.contains(REDACTED));
+    }
+
+    #[test]
+    fn a_word_shorter_than_the_range_is_left_alone() {
+        // One character below the lower bound: ordinary text must not be eaten
+        // by widening the range, or the log stops answering diagnostic questions.
+        let word = format!("{}{}", "z1", "0".repeat(17));
+        assert_eq!(word.len(), BARE_TOKEN_MIN_LEN - 1);
+        assert_eq!(scrub(&format!("id {word} done")), format!("id {word} done"));
+    }
+
+    #[test]
     fn a_commit_hash_is_not_mistaken_for_a_token() {
-        // 40 hex characters: the same length, and it must survive untouched.
+        // 40 hex characters: inside the length range, and it must survive untouched.
         let sha = "a5a0cdfe4f705edca51443dc836b9f1f43944f6e";
-        assert_eq!(sha.len(), 40);
+        assert_eq!(sha.len(), BARE_TOKEN_MAX_LEN);
         assert_eq!(scrub(&format!("released {sha}")), format!("released {sha}"));
+
+        // An abbreviated hash now also falls inside the range.
+        let short = &sha[..24];
+        assert_eq!(scrub(&format!("released {short}")), format!("released {short}"));
     }
 
     #[test]
@@ -408,7 +446,11 @@ mod scrub_tests {
 
     #[test]
     fn longest_marker_wins_so_key_does_not_shadow_api_key() {
-        let scrubbed = scrub("?api_key=abcdef123456");
+        // Assembled rather than written out, like every other input here: a
+        // credential-shaped literal is what a secret scanner reports, and the
+        // report cannot be told apart from a real leak without reading the source.
+        let value = "0".repeat(12);
+        let scrubbed = scrub(&format!("?api_key={value}"));
         assert_eq!(scrubbed, "?api_key=[REDACTED]");
     }
 
