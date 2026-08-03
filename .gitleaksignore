@@ -1,0 +1,52 @@
+# Fingerprints of findings that cannot be removed, only explained.
+#
+# Format: <commit>:<path>:<rule-id>:<line>
+#
+# Only add an entry here when the finding is BOTH a false positive AND sits in a
+# commit that is already published, so rewriting it is off the table. A finding
+# in unpushed work gets fixed, never listed. Every entry states what the value
+# actually is, so the next reader does not have to trust this file's judgement.
+#
+# ---------------------------------------------------------------------------
+# b4cc32e "feat(backend): instrument catalogue, honest failure states, local
+# logging and cancellable AI calls" - published on main and reachable from tags
+# v0.4.3, v0.4.4 and v0.4.5.
+#
+# Two synthetic test inputs for the log scrubber, both matched by the built-in
+# generic-api-key rule on their surrounding marker:
+#
+#   line 337  ?api_key=abcdef123456
+#             Twelve characters, the alphabet followed by counting digits.
+#   line 343  x-goog-api-key: AIzaSyD-1234567890abcdefghijklmnopqrstuv
+#             The Google prefix followed by digits 1-0 and the alphabet in order.
+#
+# Neither was ever issued by a provider. Both were replaced in 8c73b39 by values
+# assembled at run time from fragments, which is why nothing in the working tree
+# matches these rules today. The scan runs with fetch-depth: 0, so it re-reads
+# the original commit on every push regardless of the current file.
+#
+# Rewriting history was rejected: the tags above are released, the auto-updater
+# resolves against them, and the cost is not justified by two placeholder strings.
+b4cc32e5977028986c85577a3a7475d5fc954577:src-tauri/src/logging.rs:generic-api-key:337
+b4cc32e5977028986c85577a3a7475d5fc954577:src-tauri/src/logging.rs:generic-api-key:343
+
+# ---------------------------------------------------------------------------
+# Same commit, line 328: a REAL Finnhub token, not a placeholder.
+#
+# This entry is not a false positive and is not filed as one. The token was
+# issued, was committed inside a sample request URL, and reached a public
+# repository. It was revoked and replaced on 2026-08-03, which is the only
+# reason the finding can be suppressed rather than acted on; the value in the
+# commit no longer authenticates anything.
+#
+# It went unnoticed for five days because no rule could see it. The built-in
+# catalogue has no Finnhub rule, and this repository's own finnhub-api-token
+# rule required 40 characters while an issued token is 20 - so the rule written
+# specifically for this provider could never have matched this provider's
+# credential. Both that rule and looks_like_bare_api_token in
+# src-tauri/src/logging.rs now accept a 20-40 range, verified by running the old
+# and the new pattern against this exact line.
+#
+# Do not read this entry as "handled". Read it as the reason the surrounding
+# rules changed. A green gitleaks status did not mean there was no secret here.
+b4cc32e5977028986c85577a3a7475d5fc954577:src-tauri/src/logging.rs:finnhub-api-token:328

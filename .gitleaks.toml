@@ -10,27 +10,43 @@ useDefault = true
 # generic entropy threshold, which is why it needs one of its own.
 #
 # The rule is anchored in CONTEXT ("finnhub...", or a "token=" query parameter),
-# not in the SHAPE of the value. A shape-only rule - 40 alphanumeric characters -
+# not in the SHAPE of the value. A shape-only rule - a run of alphanumerics -
 # would flag every commit hash in the changelog, in documentation and in code
-# comments, because a hash is exactly that long. False positives are not free:
+# comments, because a hash is exactly that shape. False positives are not free:
 # they teach people to wave the red status through, which is worse than not
 # having the rule at all.
 #
+# LENGTH: 20 to 40 characters. It read {40} until 2026-08-03, which was an
+# assumed length, not a measured one - an issued Finnhub token is 20 characters,
+# so the rule could never have fired on the credential it was written for. The
+# range is deliberately wider than any one provider: a length is the provider's
+# choice and changes without notice, whereas the context anchor is what actually
+# makes the rule specific.
+#
+# NO ENTROPY FLOOR, deliberate. An entropy threshold is a way to add specificity
+# to a rule that has none - a shape-only rule needs it. Here the anchor already
+# supplies it, so a floor can only ever suppress a true positive: a short or
+# low-variety token sitting right after "token=" is still a token.
+#
 # KNOWN LIMITATION, deliberate: a token pasted with no surrounding context (a
-# bare 40-character string on its own) will NOT be caught here. Widening the
+# bare alphanumeric string on its own) will NOT be caught here. Widening the
 # rule to cover it is the shape-only variant rejected above. That case is
 # covered at runtime instead, by `looks_like_bare_api_token` in
 # src-tauri/src/logging.rs, which redacts it before it can reach the log file.
 # Do not "fix" this by removing the context anchor.
 [[rules]]
 id = "finnhub-api-token"
-description = "Finnhub API token (40 alphanumeric characters)"
-regex = '''(?i)\b(?:finnhub[_-]?(?:api[_-]?)?(?:token|key)|[?&]token)\s*[=:]\s*['"]?([a-z0-9]{40})['"]?'''
+description = "Finnhub API token (20-40 alphanumeric characters after a token marker)"
+regex = '''(?i)\b(?:finnhub[_-]?(?:api[_-]?)?(?:token|key)|[?&]token)\s*[=:]\s*['"]?([a-z0-9]{20,40})['"]?'''
 keywords = ["finnhub", "token"]
-entropy = 3.0
 
-# No [allowlist] on purpose. Test inputs in this repository are assembled at run
-# time from fragments, so they do not match this rule and need no suppression -
-# see the security tests in src-tauri/src/logging.rs. An allowlist would silence
-# the alert instead of removing what triggers it, and its fingerprints are tied
-# to commit SHAs, so every edit to the file would require updating them.
+# No [allowlist] here on purpose. Test inputs in this repository are assembled at
+# run time from fragments, so they do not match this rule and need no suppression
+# - see the security tests in src-tauri/src/logging.rs. An allowlist would
+# silence an alert instead of removing what triggers it.
+#
+# Findings that are genuinely unremovable - synthetic values in commits that are
+# already published and tagged - are suppressed by fingerprint in .gitleaksignore
+# instead. That file is the right place for them precisely because a published
+# commit is immutable: its SHA, path and line numbers can never drift, which is
+# the objection that rules out pinning fingerprints against working-tree content.
