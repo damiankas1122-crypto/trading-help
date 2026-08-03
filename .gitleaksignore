@@ -54,3 +54,16 @@ b4cc32e5977028986c85577a3a7475d5fc954577:src-tauri/src/logging.rs:generic-api-ke
 # Do not read this entry as "handled". Read it as the reason the surrounding
 # rules changed. A green gitleaks status did not mean there was no secret here.
 b4cc32e5977028986c85577a3a7475d5fc954577:src-tauri/src/logging.rs:finnhub-api-token:328
+
+# ---------------------------------------------------------------------------
+# 3a0c641, this file. The first version of the section above quoted the two
+# placeholder values it was describing, so this file matched the same rule it
+# exists to silence. The quotes were dropped in 784efbc, but the scan reads
+# every commit, so the original one still reports them - the same reason the
+# b4cc32e entries above cannot simply be deleted.
+#
+# The lesson is the general one this repository already applies to tests: a
+# credential-shaped string is unsafe wherever it is written, and a file about
+# secret scanning is not an exemption.
+3a0c641eebd24b729a2320d970123cb54b6e3fb2:.gitleaksignore:generic-api-key:18
+3a0c641eebd24b729a2320d970123cb54b6e3fb2:.gitleaksignore:generic-api-key:20
