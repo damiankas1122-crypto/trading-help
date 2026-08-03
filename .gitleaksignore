@@ -13,12 +13,16 @@
 # v0.4.3, v0.4.4 and v0.4.5.
 #
 # Two synthetic test inputs for the log scrubber, both matched by the built-in
-# generic-api-key rule on their surrounding marker:
+# generic-api-key rule on the marker in front of them.
 #
-#   line 337  ?api_key=abcdef123456
-#             Twelve characters, the alphabet followed by counting digits.
-#   line 343  x-goog-api-key: AIzaSyD-1234567890abcdefghijklmnopqrstuv
-#             The Google prefix followed by digits 1-0 and the alphabet in order.
+# The values are described, never quoted. Pasting a credential-shaped string
+# into this file turns this file into the next finding - which is exactly what
+# the first version of it did.
+#
+#   line 337  an "api_key=" parameter whose value is twelve characters: the
+#             first six letters of the alphabet, then counting digits.
+#   line 343  an "x-goog-api-key:" header whose value is the Google key prefix,
+#             then the digits in order, then the alphabet in order.
 #
 # Neither was ever issued by a provider. Both were replaced in 8c73b39 by values
 # assembled at run time from fragments, which is why nothing in the working tree
